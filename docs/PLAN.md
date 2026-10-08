@@ -22,7 +22,7 @@ Strategy: **run alongside Schoolrunner, then replace it module by module.** Phas
 
 ## Data model
 
-Effective-dated memberships throughout (`starts_on`, `ends_on`). All tables have `id uuid`, `created_at`, `updated_at`, `created_by`.
+Effective-dated memberships throughout (`starts_on`, `ends_on` = last day included, null = ongoing; overlaps rejected by the database). All tables have `id uuid`, `school_id`, `created_at`, `updated_at`, `created_by` → `users` (exceptions: `schools` has no `school_id`/`created_by`; `audit_log`, `sensitive_reads`, and `sessions` record their actor instead). See `docs/decisions/0001-phase-0-schema.md`.
 
 **Calendar and structure**
 - `school_years` (label, starts_on, ends_on)
@@ -30,18 +30,26 @@ Effective-dated memberships throughout (`starts_on`, `ends_on`). All tables have
 - `school_days` (date, is_instructional, day_type) — imported from Google Calendar; denominator for attendance rates
 - `bell_schedules`, `periods`
 
+**Identity and access**
+- `schools` (name, dbn, timezone)
+- `users` (kind: staff / student / family / system, email, display_name, status, last_sign_in_at) — one row per sign-in identity; `staff`, `students`, and `contacts` point to it via `user_id`
+- `staff_roles` (staff_id, role, source: directory / manual, source_group_email, starts_on, ends_on) — several roles per person
+- `role_group_mappings` (google_group_email, role) — admin-editable
+- `sessions` (user_id, surface: staff / student / family, method: google / email_code / dev, token_hash, expires_at, last_seen_at, revoked_at) — replaces `family_sessions`
+
 **People**
-- `students` (legal + preferred name, pronouns, DOB, osis [unique, sensitive], photo_url, `custom jsonb`)
+- `students` (user_id, legal + preferred name, pronouns, DOB, osis [unique, restricted], google_email [unique], photo_url, `custom jsonb`)
 - `name_pronunciations` (student_id, phonetic text, audio_url in Cloud Storage, recorded_by: student / family / staff, language, updated_at) — current version shown, history kept
-- `staff` (google_user_id, email, name, role, `custom jsonb`) — synced from Workspace Directory
-- `contacts` (name, phone(s), email, language, preferred channel)
-- `student_contacts` (relationship, is_guardian, lives_with, pickup_allowed, contact_priority)
+- `staff` (user_id, google_user_id, email, given/family/preferred name, title, status, org_unit_path, directory_synced_at, `custom jsonb`) — synced from Workspace Directory; roles in `staff_roles`
+- `contacts` (user_id, name, phone(s), email [never a creoprep.org address], language, preferred channel)
+- `student_contacts` (relationship, is_guardian, lives_with, pickup_allowed, contact_priority, portal_access, starts_on, ends_on)
 - `student_supports` (type: IEP/504/ELL/other, details, dates) — restricted table
 
 **Enrollment and cohorts**
-- `enrollments` (student_id, school_year_id, grade_level, status, entry/exit dates and codes)
-- `groups` (type: homeroom / grade_team / advisory / intervention / club / team / custom, name, school_year_id, owner)
+- `enrollments` (student_id, school_year_id, grade_level, status, entry/exit dates and codes) — periods may not overlap per student
+- `groups` (type: homeroom / grade_team / advisory / intervention / club / team / custom, name, school_year_id, grade_level, owner, google_group_email, archived_at)
 - `group_memberships` (group_id, student_id, starts_on, ends_on)
+- `group_staff` (group_id, staff_id, function: homeroom_teacher / lead / member, starts_on, ends_on) — drives "my" views, teachers' sensitive access for assigned students, and homeroom attendance rights
 - `courses`, `sections`, `section_staff`, `section_enrollments`
 
 **Attendance**
@@ -78,8 +86,8 @@ Effective-dated memberships throughout (`starts_on`, `ends_on`). All tables have
 - `rules` (name, spec jsonb, applies_to: list/tracker) — eligibility logic
 
 **Family portal and reports**
-- `family_accounts` (contact_id, phone, email, language, last_sign_in) — `student_contacts.portal_access` controls who gets one
-- `family_sessions`, `family_sign_in_codes`
+- Family accounts are `users` rows (kind: family) linked from `contacts.user_id`; `student_contacts.portal_access` controls who gets one. Sessions live in `sessions`.
+- `family_sign_in_codes`
 - `family_visibility` (scope: school / grade / student, module or field key, visible, approved_by)
 - `report_templates` (name, kind: weekly slip / progress report / custom, audience grade(s), blocks jsonb, reflection_prompts jsonb, show_reflection_to_family, languages, status: draft/approved, approved_by)
 - `report_runs` (template_id, period, population spec, generated_at, generated_by)
@@ -106,9 +114,9 @@ Effective-dated memberships throughout (`starts_on`, `ends_on`). All tables have
 - `widgets` (dashboard_id, type: number/table/bar/line/heatgrid/list/notes, spec jsonb, position)
 
 **System**
-- `ai_grants` (role or user_id, effect: grant/revoke, features[] nullable = all, granted_by, granted_at, note) — written only by the `ai:grant` / `ai:revoke` CLI
-- `audit_log` (actor, action, entity, entity_id, before jsonb, after jsonb, at)
-- `sensitive_reads` (actor, entity, field, at)
+- `ai_grants` (role or user_id, effect: grant/revoke, features[] nullable = all, note, ended_at, ended_by; created_by/created_at = who granted it and when) — written only by the `ai:grant` / `ai:revoke` CLI
+- `audit_log` (actor_user_id, action, entity, entity_id, before jsonb, after jsonb, via, request_id, at) — append-only, kept forever
+- `sensitive_reads` (actor_user_id, entity, entity_id, field, via, at) — append-only
 - `jobs` (pg-boss managed)
 
 ## The query spec
@@ -253,7 +261,7 @@ Each phase ends with a short demo to leadership and a written check against exit
 - [ ] Permission layer + audit log
 - [ ] `ai_grants` table (role and user grants, per-feature scope), `pnpm ai:grant` / `ai:revoke` / `ai:list` CLI, `AI_ENABLED` kill switch
 - [ ] Google Cloud project, Terraform for Cloud Run (app + worker), Cloud SQL HA, Secret Manager, Storage; staging and production
-- [ ] `school_id` on every school-data table
+- [x] `school_id` on every school-data table (enforced by `src/core/db/schema-rules.test.ts`)
 - [ ] k6 load test: 500 concurrent users, homeroom-start burst
 - [ ] App shell: sidebar, command palette, keyboard layer, `?` help sheet, light/dark, Creo tokens
 - [x] Module registry and `defineModule`
@@ -371,6 +379,9 @@ Not planned; add only if needed.
 17. `school_id` is on every table except `schools`; each user belongs to exactly one school for now.
 18. Staff who are also Creo parents use a separate family identity with a personal email. A contact with portal access cannot use a `creoprep.org` address.
 19. Dev sign-in is local-only: not on staging or production. Staging uses real Google sign-in with test accounts; load-test sessions are minted by a database-side script that refuses to run without the synthetic-data marker.
+20. Phase 0 schema approved (`docs/decisions/0001-phase-0-schema.md`). Sensitivity: contact details are `standard`; teachers see `sensitive` fields only for students they're assigned to (via `group_staff`) and never `confidential`; `support` sees all levels; `coach` sees `standard` only; `admin` sees the same data as `leader`.
+21. Write rules: any staff member may log behavior and family communication for any student; attendance is taken by the homeroom teacher plus ops, admin, and leader; grades by the section's teacher (Phase 7).
+22. A student's Google account links to their record by exact match on `students.google_email`, imported from the Big Data Tracker; the graduation-year OU is a cross-check, and a mismatch is flagged for ops, not blocked.
 
 ## Open decisions
 

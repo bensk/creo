@@ -32,7 +32,8 @@ jobs:
           --health-timeout 3s
           --health-retries 30
     env:
-      TEST_DATABASE_URL: postgres://creo:creo@localhost:5432/creo_test
+      TEST_DATABASE_URL: postgres://creo_app:creo_app@localhost:5432/creo_test
+      TEST_MIGRATION_DATABASE_URL: postgres://creo:creo@localhost:5432/creo_test
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6

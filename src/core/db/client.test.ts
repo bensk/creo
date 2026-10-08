@@ -6,8 +6,9 @@ describe("database client", () => {
     await getSql().end();
   });
 
-  it("connects to the test database", async () => {
-    const [row] = await getSql()<{ db: string }[]>`select current_database() as db`;
-    expect(row?.db).toBe("creo_test");
+  it("connects to the test database as the app role", async () => {
+    const [row] = await getSql()<{ db: string; role: string }[]>`
+      select current_database() as db, current_user as role`;
+    expect(row).toEqual({ db: "creo_test", role: "creo_app" });
   });
 });

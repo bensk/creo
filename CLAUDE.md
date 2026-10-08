@@ -38,7 +38,7 @@ The product goals, in priority order:
 ```
 pnpm dev              # local dev server
 pnpm db:up            # start local Postgres (docker compose)
-pnpm db:migrate       # apply migrations
+pnpm db:migrate       # apply migrations (as the owner, MIGRATION_DATABASE_URL; the app connects as creo_app)
 pnpm db:generate      # generate a migration from schema changes
 pnpm db:seed          # load synthetic seed data (never real students)
 pnpm test             # vitest
@@ -250,7 +250,7 @@ Every export has a golden-file test.
 - Ben approves every schema change, new module, and promotion of a tracker or custom field to a real column. Summarize the proposed migration in plain language and wait for approval before generating it. (Later this becomes the `schema.approve` permission for a small team.)
 - Before starting a task, state which phase and module it belongs to (see `docs/PLAN.md`).
 - Make the smallest change that completes the task. Do not refactor unrelated code.
-- Schema changes: edit the module's `schema.ts`, run `pnpm db:generate`, review the SQL, commit migration and schema together.
+- Schema changes: edit the module's `schema.ts`, run `pnpm db:generate`, review the SQL, commit migration and schema together. Use the helpers in `core/db/columns.ts` and `core/db/base.ts`; `src/core/db/schema-rules.test.ts` fails if a table lacks `school_id`, `created_by`, or an index on a foreign key. Rules drizzle-kit can't express (no-overlap constraints, triggers, grants) go in a `pnpm db:generate --custom` migration.
 - Write an ADR in `docs/decisions/` for any decision that would surprise a future reader.
 - If a requirement is ambiguous and the choice affects data shape or permissions, stop and ask. For UI details, pick the simplest reasonable option and note it.
 - Update the phase checklist in `docs/PLAN.md` when a task completes.
