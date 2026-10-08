@@ -1,9 +1,9 @@
-import type { PgDatabase, PgTable } from "drizzle-orm/pg-core";
-import type { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js";
+import type { PgTable } from "drizzle-orm/pg-core";
+import type { Db } from "../db/types";
 import type { StaffPersona } from "./personas";
 import type { Rng } from "./random";
 
-export type SeedDb = PgDatabase<PostgresJsQueryResultHKT, Record<string, unknown>>;
+export type SeedDb = Db;
 
 /** Rows for one table, inserted in the order batches are listed. */
 export interface SeedBatch {
