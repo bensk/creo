@@ -71,3 +71,22 @@ export async function userIdByEmail(tx: Db, email: string): Promise<string> {
   if (!row) throw new Error(`No seeded user with email ${email}`);
   return row.id;
 }
+
+/** Signs a seeded user in (dev method) inside the transaction and returns their viewer. */
+export async function viewerFor(tx: Db, email: string, surface: "staff" | "student" | "family" = "staff") {
+  const { createSession } = await import("@/core/auth/session");
+  const { viewer } = await createSession(tx, { userId: await userIdByEmail(tx, email), surface, method: "dev" });
+  return viewer;
+}
+
+/** A seeded student's id by preferred-or-legal first name and last name. */
+export async function studentIdByName(tx: Db, firstName: string, lastName: string): Promise<string> {
+  const { students } = await import("@/modules/students/schema");
+  const { and, eq } = await import("drizzle-orm");
+  const [row] = await tx
+    .select({ id: students.id })
+    .from(students)
+    .where(and(eq(students.legalFirstName, firstName), eq(students.legalLastName, lastName)));
+  if (!row) throw new Error(`No seeded student ${firstName} ${lastName}`);
+  return row.id;
+}

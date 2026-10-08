@@ -14,7 +14,7 @@ test.describe("signed out", () => {
   }
 
   test("a forged cookie is not a session", async ({ page, context }) => {
-    await context.addCookies([{ name: "creo_staff_session", value: "forged", url: "http://localhost:3100" }]);
+    await context.addCookies([{ name: "creo_staff_session", value: "forged", url: "http://localhost:3000" }]);
     await page.goto("/");
     await expect(page).toHaveURL("/sign-in");
   });

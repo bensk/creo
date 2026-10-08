@@ -1,3 +1,5 @@
+import type { FieldSensitivity } from "../permissions/sensitivity";
+
 // The module contract. Every module in src/modules/<id>/manifest.ts exports
 // `manifest = defineModule({...})`, and src/modules/index.ts registers it.
 // Further manifest sections (query sources, profile tabs, notifications) are
@@ -30,6 +32,11 @@ export interface ModuleManifest {
   id: string;
   /** Drizzle tables owned by this module. */
   schema?: Readonly<Record<string, unknown>>;
+  /**
+   * Sensitivity of every column of each student-data table this module owns,
+   * keyed by SQL table name then column name. A test fails if a column is missing.
+   */
+  fieldSensitivity?: Readonly<Record<string, FieldSensitivity>>;
   permissions?: readonly PermissionDef[];
   nav?: readonly NavItem[];
   commands?: readonly CommandDef[];
