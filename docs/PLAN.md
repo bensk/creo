@@ -255,7 +255,7 @@ Each phase ends with a short demo to leadership and a written check against exit
 
 ### Phase 0 — Foundation
 - [x] Repo, CI (lint, typecheck, test), docker compose Postgres
-- [ ] Synthetic seed generator (realistic names, grades 5–8, four homerooms per grade, contacts, a persona for every role; each module adds its own history, e.g. a year of attendance/behavior, when its schema lands)
+- [x] Synthetic seed generator (realistic names, grades 5–8, four homerooms per grade, contacts, a persona for every role; each module adds its own history, e.g. a year of attendance/behavior, when its schema lands)
 - [ ] Dev-only "sign in as a seeded user" for every role; compiled out of production builds, with CI proof
 - [ ] Google sign-in with domain restriction; staff sync from Directory; roles from Google Groups
 - [ ] Permission layer + audit log
