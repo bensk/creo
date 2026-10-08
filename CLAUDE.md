@@ -16,7 +16,7 @@ The product goals, in priority order:
 
 ## Stack
 
-- Next.js (App Router, React Server Components, Server Actions), TypeScript `strict`
+- Next.js (App Router, React Server Components, Server Actions), TypeScript `strict` (pinned to 6.0.x until typescript-eslint supports 7)
 - Tailwind CSS with Creo design tokens (see Design system below)
 - PostgreSQL via Drizzle ORM; migrations with `drizzle-kit`
 - Auth.js with Google provider, restricted to the `creoprep.org` Workspace domain
@@ -122,11 +122,15 @@ Memberships (homeroom, grade, section, group, enrollment status) are effective-d
 ### Permissions and privacy
 
 - Every server action and query goes through `core/permissions`. Default deny.
-- Staff roles: `admin`, `leader`, `ops`, `teacher`, `support` (SPED/ELL/counseling), `coach`. Teachers see students in their sections and grade team; leaders see all.
-- `student` role (Google sign-in with student Workspace accounts): sees only their own records that are explicitly published to students, can ask their teachers questions, and can reflect on their weekly slip (see Student portal).
+- Staff roles: `admin`, `leader`, `ops`, `teacher`, `support` (SPED/ELL/counseling), `coach`. A person can hold several roles; their permissions are the union. Roles come from Google Groups through a group-to-role mapping stored as data (editable by admins); an admin can also assign a role manually, and Directory sync never overwrites a manual assignment.
+- All staff can see every student in the school. A teacher's assignments (homeroom, grade team, sections) decide what is shown first — "my classes," "my homeroom," their gradebooks, attendance, and behavior — not what is allowed. Sensitive fields are still gated by sensitivity level.
+- Every sign-in resolves to one `users` row (kind: staff / student / family) linked to `staff`, `students`, or `contacts`; that row is the actor for sessions, audit, AI grants, and shares. Imports and CLIs act as named system users, so `created_by` is never null.
+- `student` role (Google sign-in with student Workspace accounts; a student account is one in the `/students` OU or its graduation-year sub-OUs, determined from the Directory, never from the email address): sees only their own records that are explicitly published to students, can ask their teachers questions, and can reflect on their weekly slip (see Student portal).
 - `family` role: separate auth (see Family portal). Families see only their own children and only what is published to families.
 - Sensitive fields (IEP/504 status, ELL status, health, discipline narratives, family situation notes) carry a `sensitivity` level and are hidden unless the role grants it. This applies to grids, exports, dashboards, and AI prompts.
-- Every write is recorded in `audit_log` (who, what, before, after, when). Reads of sensitive fields and all exports are logged too.
+- Every write is recorded in `audit_log` (who, what, before, after, when), in the same transaction as the write. Reads of sensitive fields and all exports are logged too. The audit log is append-only (the app's database role cannot update or delete it), kept forever, and readable only by `admin` and `leader`, with values redacted to the reader's sensitivity level.
+- Sessions are stored in the database and revocable: staff 7 days rolling, families 30 days per device, students until the end of the school day.
+- Dev sign-in (pick a seeded user) exists for local development only. It is compiled out of production builds, refuses to run unless the environment and database are local and seeded, and the app refuses to start if it is configured in production. Never weaken these guards; staging uses real Google sign-in.
 - Never log student PII to the console, error tracker, or analytics. Log IDs only.
 - Seed and test data are synthetic. Never commit real student data, OSIS numbers, or exports. `.gitignore` covers `data/`, `*.csv`, `*.xlsx`.
 
@@ -173,7 +177,7 @@ Slack is Creo's operating system, so the SIS meets staff there. Slack is a conve
 ### Family portal
 
 - Lives in `src/app/(family)` with its own layout, its own auth, and no access to staff routes. Mobile-first: most families will open it on a phone, from an email link or a printed slip's QR code.
-- Sign-in: one-time code by email to a contact on file (text-message codes arrive with the SMS module) (`student_contacts` with `portal_access = true`). No passwords. Sessions last 30 days per device.
+- Sign-in: one-time code by email to a contact on file (text-message codes arrive with the SMS module) (`student_contacts` with `portal_access = true`). No passwords. A portal contact's email can never be a `creoprep.org` address: staff who are Creo parents sign in to the family portal with a personal email, as a separate identity. Sessions last 30 days per device.
 - **Default deny.** Families see nothing about a student unless it is published through `family_visibility` settings (per field, per module, per grade). Sensitive fields can never be published to families except through a report template a leader approves.
 - **Bilingual.** English and Spanish at launch; the language list is data so more can be added. The family's language comes from the contact's `language` field and can be switched on every page. All UI strings and all template text exist in every enabled language; a template cannot be published with a missing translation. Staff-written free text (behavior narratives, teacher comments) is shown as written, and the slip builder flags free-text fields so staff know to write them in the family's language or both.
 - **Slips and progress reports** are built from templates: blocks (attendance summary, behavior points and notes, grades, assignments missing, tracker fields, a teacher comment, a static message) assembled in a template builder, previewed per student in both languages, then delivered by email, portal, or printed PDF (with a QR code to the portal). Delivery channels are pluggable (`deliveryChannels` in the family module) so the SMS module can add text delivery without changing slip code. Every delivery is logged to the communication log.
@@ -195,7 +199,7 @@ Slack is Creo's operating system, so the SIS meets staff there. Slack is a conve
 Apply the Creo College Prep design system (tokens, typography, voice): https://claude.ai/code/artifact/8fe2e309-f268-4777-a5b4-cb78925f5ffb
 
 - Fonts: Inter for text; Maple Mono for numbers, IDs, dates, scores, and anything tabular.
-- Brand: primary `#ffb12a` (orange), `#434350` (charcoal), `#007bff` (blue). Expanded palette: coral pink, emerald green, soft purple, teal, dark navy, light gray. Define these as Tailwind theme tokens in `tailwind.config.ts`; never hardcode hex values in components.
+- Brand: primary `#ffb12a` (orange), `#434350` (charcoal), `#007bff` (blue). Expanded palette: coral pink, emerald green, soft purple, teal, dark navy, light gray. Define these as Tailwind v4 theme tokens in the `@theme` block of `src/app/globals.css`; never hardcode hex values in components.
 - Support light and dark mode.
 - UI copy is plain and useful. No cute or clever microcopy, no metaphors, no editorial voice.
 

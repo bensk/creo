@@ -246,7 +246,9 @@ Privacy checklist before any real student data is loaded:
 Each phase ends with a short demo to leadership and a written check against exit criteria.
 
 ### Phase 0 — Foundation
-- [ ] Repo, CI (lint, typecheck, test), docker compose Postgres, synthetic seed generator (realistic names, grades 5–8, four homerooms per grade, contacts, a year of attendance/behavior)
+- [x] Repo, CI (lint, typecheck, test), docker compose Postgres
+- [ ] Synthetic seed generator (realistic names, grades 5–8, four homerooms per grade, contacts, a persona for every role; each module adds its own history, e.g. a year of attendance/behavior, when its schema lands)
+- [ ] Dev-only "sign in as a seeded user" for every role; compiled out of production builds, with CI proof
 - [ ] Google sign-in with domain restriction; staff sync from Directory; roles from Google Groups
 - [ ] Permission layer + audit log
 - [ ] `ai_grants` table (role and user grants, per-feature scope), `pnpm ai:grant` / `ai:revoke` / `ai:list` CLI, `AI_ENABLED` kill switch
@@ -254,7 +256,7 @@ Each phase ends with a short demo to leadership and a written check against exit
 - [ ] `school_id` on every school-data table
 - [ ] k6 load test: 500 concurrent users, homeroom-start burst
 - [ ] App shell: sidebar, command palette, keyboard layer, `?` help sheet, light/dark, Creo tokens
-- [ ] Module registry and `defineModule`
+- [x] Module registry and `defineModule`
 - Exit: a staff member signs in, sees their role-appropriate shell, and every shortcut in CLAUDE.md works.
 
 ### Phase 1 — Students, contacts, the grid
@@ -357,6 +359,18 @@ Not planned; add only if needed.
 5. Schema and module approval: Ben now; a small approver group later.
 6. Build team: Ben + Claude Code.
 7. Students: student portal with ask-a-teacher and weekly slip reflections, each toggleable in settings.
+8. Identity: one `users` table for every sign-in (staff / student / family), linked to `staff`, `students`, or `contacts`; system users for imports and CLIs.
+9. Student accounts are identified by Workspace OU (`/students` and its graduation-year sub-OUs), read from the Directory.
+10. Staff can hold several roles (permissions are the union). The Google Group → role mapping is data, editable by admins; manual role assignments are allowed and survive Directory sync.
+11. All staff see every student. Teacher assignments drive "my" views (classes, homeroom, gradebooks, attendance, behavior), not access. Sensitive fields remain gated by sensitivity level.
+12. Sensitivity levels: `standard` < `restricted` (OSIS, contact details) < `sensitive` (IEP/504/ELL/health) < `confidential` (discipline narratives, family situation, safety). Ops sees `restricted`, not supports. The full role × sensitivity matrix is drafted in Phase 0 for sign-off.
+13. Phase 0 pulls forward minimal versions (core columns only) of `students`, `contacts`, `student_contacts`, `enrollments`, `groups`, `group_memberships`, `family_accounts`, and `family_sessions`, so every role can be tested end to end. Full columns land in their own phases. Each module seeds its own history (attendance, behavior) when its schema lands.
+14. Sessions are stored in the database and revocable. Staff: 7 days, rolling. Families: 30 days per device. Students: end at the close of each school day (shared devices).
+15. Audit log: kept forever; readable by `admin` and `leader` only, with values redacted to the reader's sensitivity level. Append-only at the database level.
+16. AI grant resolution: user-level rows override role-level rows for the features they name; at the same level, revoke beats grant; `AI_ENABLED=false` overrides everything. `granted_by` comes from the operator's gcloud account.
+17. `school_id` is on every table except `schools`; each user belongs to exactly one school for now.
+18. Staff who are also Creo parents use a separate family identity with a personal email. A contact with portal access cannot use a `creoprep.org` address.
+19. Dev sign-in is local-only: not on staging or production. Staging uses real Google sign-in with test accounts; load-test sessions are minted by a database-side script that refuses to run without the synthetic-data marker.
 
 ## Open decisions
 
