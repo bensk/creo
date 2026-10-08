@@ -1,4 +1,4 @@
-import { and, eq, isNull, gte, lte, or } from "drizzle-orm";
+import { and, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import { currentOn, schoolToday } from "@/core/db/dates";
 import type { Db } from "@/core/db/types";
 import { schools } from "@/core/identity/schema";
@@ -46,4 +46,41 @@ export async function familyAccessForUser(db: Db, userId: string) {
       ),
     );
   return { contactId: person.id, language: person.language, studentIds: children.map((c) => c.studentId).sort() };
+}
+
+/**
+ * Students whose preferred or legal name matches every word of the query,
+ * currently enrolled first. Standard fields only.
+ */
+export async function searchStudents(db: Db, schoolId: string, query: string, limit = 8) {
+  const words = query.trim().split(/\s+/).filter(Boolean).slice(0, 4);
+  if (words.length === 0) return [];
+  const nameText = sql`concat_ws(' ', ${students.preferredFirstName}, ${students.legalFirstName}, ${students.preferredLastName}, ${students.legalLastName})`;
+  const matches = words.map((w) => sql`${nameText} ilike ${`%${w.replace(/[\\%_]/g, (c) => `\\${c}`)}%`}`);
+  // Correlated subqueries name the outer table explicitly: inside a subquery,
+  // drizzle renders a bare column name, which Postgres would resolve to the inner table.
+  const outerId = sql.raw(`"students"."id"`);
+  const enrolled = sql<boolean>`exists (
+    select 1 from enrollments e
+    where e.student_id = ${outerId} and e.status = 'active' and e.exit_date is null
+  )`;
+  const grade = sql<number | null>`(
+    select e.grade_level from enrollments e
+    where e.student_id = ${outerId}
+    order by e.entry_date desc limit 1
+  )`;
+  return db
+    .select({
+      id: students.id,
+      legalFirstName: students.legalFirstName,
+      legalLastName: students.legalLastName,
+      preferredFirstName: students.preferredFirstName,
+      preferredLastName: students.preferredLastName,
+      grade,
+      enrolled,
+    })
+    .from(students)
+    .where(and(eq(students.schoolId, schoolId), ...matches))
+    .orderBy(sql`${enrolled} desc`, students.legalLastName, students.legalFirstName)
+    .limit(limit);
 }

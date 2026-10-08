@@ -11,7 +11,7 @@ import { contacts, enrollments, studentContacts, students } from "./schema";
 
 export const STUDENTS_PER_HOMEROOM = 25;
 const WITHDRAWN_COUNT = 3;
-const WITHDRAWN_ON = "2026-10-16";
+const WITHDRAWN_ON = "2026-10-01";
 // Synthetic OSIS numbers all start with 999 so they can't be mistaken for real ones.
 const OSIS_PREFIX = "999";
 

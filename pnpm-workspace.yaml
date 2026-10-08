@@ -1,3 +1,6 @@
 allowBuilds:
   esbuild: true
   unrs-resolver: true
+  # Not needed: native binaries ship as platform packages. Blocked deliberately.
+  "@parcel/watcher": false
+  "@swc/core": false

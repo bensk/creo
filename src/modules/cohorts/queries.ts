@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { currentOn } from "@/core/db/dates";
 import type { Db } from "@/core/db/types";
 import { schools } from "@/core/identity/schema";
@@ -61,4 +61,43 @@ export async function isHomeroomTeacherOf(db: Db, staffId: string, studentId: st
     )
     .limit(1);
   return Boolean(row);
+}
+
+/** The groups a staff member currently works with, and how many students are in each today. */
+export async function groupsForStaff(db: Db, staffId: string) {
+  // Outer columns named explicitly; see the note in students/queries.ts.
+  const memberCount = sql<number>`(
+    select count(*)::int from group_memberships gm
+    where gm.group_id = "groups"."id"
+      and gm.starts_on <= (now() at time zone "schools"."timezone")::date
+      and (gm.ends_on is null or gm.ends_on >= (now() at time zone "schools"."timezone")::date)
+  )`;
+  return db
+    .select({
+      id: groups.id, name: groups.name, type: groups.type, gradeLevel: groups.gradeLevel,
+      function: groupStaff.function, students: memberCount,
+    })
+    .from(groupStaff)
+    .innerJoin(groups, eq(groups.id, groupStaff.groupId))
+    .innerJoin(schools, eq(schools.id, groupStaff.schoolId))
+    .where(and(eq(groupStaff.staffId, staffId), currentOn(groupStaff.startsOn, groupStaff.endsOn)))
+    .orderBy(groups.type, groups.name);
+}
+
+/** Each student's current homeroom name. */
+export async function currentHomerooms(db: Db, studentIds: readonly string[]): Promise<Map<string, string>> {
+  if (studentIds.length === 0) return new Map();
+  const rows = await db
+    .select({ studentId: groupMemberships.studentId, name: groups.name })
+    .from(groupMemberships)
+    .innerJoin(groups, eq(groups.id, groupMemberships.groupId))
+    .innerJoin(schools, eq(schools.id, groupMemberships.schoolId))
+    .where(
+      and(
+        inArray(groupMemberships.studentId, [...studentIds]),
+        eq(groups.type, "homeroom"),
+        currentOn(groupMemberships.startsOn, groupMemberships.endsOn),
+      ),
+    );
+  return new Map(rows.map((r) => [r.studentId, r.name]));
 }

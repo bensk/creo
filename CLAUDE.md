@@ -199,14 +199,16 @@ Slack is Creo's operating system, so the SIS meets staff there. Slack is a conve
 
 Apply the Creo College Prep design system (tokens, typography, voice): https://claude.ai/code/artifact/8fe2e309-f268-4777-a5b4-cb78925f5ffb
 
-- Fonts: Inter for text; Maple Mono for numbers, IDs, dates, scores, and anything tabular.
-- Brand: primary `#ffb12a` (orange), `#434350` (charcoal), `#007bff` (blue). Expanded palette: coral pink, emerald green, soft purple, teal, dark navy, light gray. Define these as Tailwind v4 theme tokens in the `@theme` block of `src/app/globals.css`; never hardcode hex values in components.
-- Support light and dark mode.
+- Tokens live in `src/app/globals.css`: the design system's colors as CSS variables for light and dark, exposed to Tailwind as `bg-surface`, `bg-surface-raised`, `bg-surface-sunken`, `text-ink`, `text-ink-title`, `text-ink-muted`, `text-link`, `border-line`, `border-line-soft`, `text-amber`, and the accent colors. Never hardcode hex values in components. `brand-amber` fails contrast on white: use it for marks, rules, and the selected-item stripe, never for text.
+- Fonts (self-hosted from npm, `src/app/fonts.ts`): Inter for text; Maple Mono for numbers, IDs, dates, scores, and anything tabular (`.data`). The app uses Maple Mono rather than the design system's Google Sans Code (Ben's call, October 2026).
+- **The system's voice is Maple Mono italic** (`.voice`), whose cursive italic sets what the system says apart from what people wrote: hints ("press ? for keys"), the "then" between keys in a sequence, metadata (dates, counts, roles, grade · homeroom), placeholders, empty states, and group labels in the palette and help sheet. Keep it lowercase and short. Never use it for student names, content staff or families wrote, or headings.
+- Light and dark mode: the viewer's system setting by default, or an explicit choice saved per device in the `creo_theme` cookie.
 - UI copy is plain and useful. No cute or clever microcopy, no metaphors, no editorial voice.
+- Staff app places live in `src/core/ui/destinations.ts`; a place whose module hasn't shipped shows a one-line "arrives in Phase N" page so every go-to shortcut works.
 
 ## Keyboard layer
 
-Implemented once in `core/ui/keyboard`. Every new screen must register its shortcuts there so they appear in the `?` help sheet.
+Implemented once in `core/ui/keyboard`. Every new screen registers its shortcuts with `useShortcut({ keys, description, group, run })` so they appear in the `?` help sheet (`group: "This screen"` for screen shortcuts). Sequences are written `"g s"`, and `"mod+k"` means ⌘K on a Mac and Ctrl K elsewhere. Single-key shortcuts never fire while typing in a field. A screen with its own search marks the input `data-screen-search` so `/` focuses it.
 
 | Keys | Action |
 |---|---|

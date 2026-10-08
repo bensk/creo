@@ -5,7 +5,7 @@ export function SignOutButton({ surface, label = "Sign out" }: { surface: Surfac
   return (
     <form action={signOutAction}>
       <input type="hidden" name="surface" value={surface} />
-      <button type="submit" className="rounded px-3 py-1.5 text-sm underline focus-visible:outline-2">
+      <button type="submit" className="min-h-11 rounded-md px-3 text-sm underline">
         {label}
       </button>
     </form>

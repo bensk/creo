@@ -30,7 +30,7 @@ export default async function DevSignInPage({
 
   return (
     <main className="mx-auto max-w-2xl p-8" data-marker={DEV_SIGN_IN_MARKER}>
-      <h1 className="text-2xl font-semibold text-brand-charcoal">Sign in as a test user</h1>
+      <h1 className="text-3xl font-bold tracking-tight">Sign in as a test user</h1>
       <p className="mt-2 text-sm">
         Local development only. You get a real session, so permissions behave exactly as they will with Google
         sign-in. Each part of the app has its own session, so you can be signed in as staff, a student, and a family at
@@ -38,7 +38,7 @@ export default async function DevSignInPage({
       </p>
 
       {!status.allowed && (
-        <p role="alert" className="mt-6 rounded border border-brand-orange p-3">
+        <p role="alert" className="mt-6 rounded-md border-2 border-amber bg-surface-raised p-3">
           {status.reason === "not_seeded"
             ? "The database hasn't been seeded. Run pnpm db:seed, then reload."
             : "Dev sign-in only works against a database on this machine."}
@@ -46,7 +46,7 @@ export default async function DevSignInPage({
       )}
 
       {refusedPersona && reason && (
-        <p role="alert" className="mt-6 rounded border border-brand-orange p-3">
+        <p role="alert" className="mt-6 rounded-md border-2 border-amber bg-surface-raised p-3">
           <strong>{refusedPersona.label}:</strong> {REFUSAL_TEXT[reason] ?? "Sign-in was refused."}
         </p>
       )}
@@ -63,10 +63,10 @@ export default async function DevSignInPage({
                     <input type="hidden" name="persona" value={persona.key} />
                     <button
                       type="submit"
-                      className="w-full rounded border px-4 py-2 text-left hover:bg-black/5 focus-visible:outline-2"
+                      className="w-full rounded-md border border-line-soft px-4 py-2 text-left hover:bg-surface-raised"
                     >
                       <span className="font-medium">{persona.label}</span>
-                      <span className="ml-2 text-sm">
+                      <span className="voice ml-2 text-sm text-ink-muted">
                         {persona.kind === "staff"
                           ? `${persona.givenName} ${persona.familyName}`
                           : `${persona.firstName} ${persona.lastName}`}

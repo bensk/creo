@@ -263,7 +263,7 @@ Each phase ends with a short demo to leadership and a written check against exit
 - [ ] Google Cloud project, Terraform for Cloud Run (app + worker), Cloud SQL HA, Secret Manager, Storage; staging and production
 - [x] `school_id` on every school-data table (enforced by `src/core/db/schema-rules.test.ts`)
 - [ ] k6 load test: 500 concurrent users, homeroom-start burst
-- [ ] App shell: sidebar, command palette, keyboard layer, `?` help sheet, light/dark, Creo tokens
+- [x] App shell: sidebar, command palette, keyboard layer, `?` help sheet, light/dark, Creo tokens; English/Spanish (next-intl) in the student and family portals
 - [x] Module registry and `defineModule`
 - Exit: a staff member signs in, sees their role-appropriate shell, and every shortcut in CLAUDE.md works.
 

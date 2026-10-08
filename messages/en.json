@@ -1,0 +1,22 @@
+{
+  "common": {
+    "signOut": "Sign out",
+    "language": "Language",
+    "schoolName": "Creo College Prep"
+  },
+  "student": {
+    "signInTitle": "Student sign-in",
+    "signInBody": "Sign in with your Creo Google account.",
+    "notSetUp": "Google sign-in is not set up yet.",
+    "greeting": "Hi, {name}",
+    "comingSoon": "Your portal is being built. Soon you'll see your attendance, your week, and your slips here."
+  },
+  "family": {
+    "signInTitle": "Creo family portal",
+    "signInBody": "Families sign in with a code sent to the email we have on file.",
+    "notSetUp": "This is not set up yet.",
+    "greeting": "Hello, {name}",
+    "children": "You can see information for {count, plural, one {# student} other {# students}}.",
+    "comingSoon": "Soon you'll see attendance, behavior, and weekly slips for your children here."
+  }
+}

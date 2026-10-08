@@ -16,12 +16,13 @@ const REFUSED = /\/dev\/sign-in\?refused=/;
 test("staff: a teacher lands in the staff app with their role", async ({ page }) => {
   await signInAs(page, /^Teacher \(7th grade, Syracuse homeroom\)/, "/");
   await expect(page).toHaveURL("/");
-  await expect(page.getByText("Jordan Reyes · teacher")).toBeVisible();
+  await expect(page.getByRole("complementary").getByText("Jordan Reyes")).toBeVisible();
+  await expect(page.getByRole("complementary").getByText("teacher", { exact: true })).toBeVisible();
 });
 
 test("staff: a person with two roles gets both", async ({ page }) => {
   await signInAs(page, /^Teacher \+ support/, "/");
-  await expect(page.getByText("Luis Almonte · support, teacher")).toBeVisible();
+  await expect(page.getByRole("complementary").getByText("support · teacher")).toBeVisible();
 });
 
 test("student: lands in the student portal, not the staff app", async ({ page }) => {
@@ -33,7 +34,7 @@ test("student: lands in the student portal, not the staff app", async ({ page })
 
 test("family: Spanish-speaking parent sees two children in Spanish", async ({ page }) => {
   await signInAs(page, /^Family \(Spanish, two children\)/, "/family");
-  await expect(page.getByText("Tiene acceso a 2 estudiante(s).")).toBeVisible();
+  await expect(page.getByText("Puede ver la información de 2 estudiantes.")).toBeVisible();
 });
 
 test("staff with no role is refused", async ({ page }) => {
@@ -61,7 +62,7 @@ test("one browser can hold staff, student, and family sessions at once", async (
   await signInAs(page, /^Student/, "/student");
   await signInAs(page, /^Family \(Spanish/, "/family");
   await page.goto("/");
-  await expect(page.getByText("Yesenia Cruz · ops")).toBeVisible();
+  await expect(page.getByRole("complementary").getByText("Yesenia Cruz")).toBeVisible();
   await page.goto("/student");
   await expect(page.getByRole("heading", { name: "Hi, Cami Martinez" })).toBeVisible();
 });

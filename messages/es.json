@@ -1,0 +1,22 @@
+{
+  "common": {
+    "signOut": "Cerrar sesión",
+    "language": "Idioma",
+    "schoolName": "Creo College Prep"
+  },
+  "student": {
+    "signInTitle": "Inicio de sesión para estudiantes",
+    "signInBody": "Inicia sesión con tu cuenta de Google de Creo.",
+    "notSetUp": "El inicio de sesión con Google todavía no está disponible.",
+    "greeting": "Hola, {name}",
+    "comingSoon": "Tu portal está en construcción. Pronto verás aquí tu asistencia, tu semana y tus reportes."
+  },
+  "family": {
+    "signInTitle": "Portal para familias de Creo",
+    "signInBody": "Las familias inician sesión con un código enviado al correo electrónico que tenemos registrado.",
+    "notSetUp": "Todavía no está disponible.",
+    "greeting": "Hola, {name}",
+    "children": "Puede ver la información de {count, plural, one {# estudiante} other {# estudiantes}}.",
+    "comingSoon": "Pronto verá aquí la asistencia, el comportamiento y los reportes semanales de sus hijos."
+  }
+}

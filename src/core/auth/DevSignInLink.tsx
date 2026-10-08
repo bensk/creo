@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 // Links to dev sign-in during local development only. The target route is not
 // compiled into production builds; these links render nothing there.
 
@@ -11,9 +13,9 @@ export function DevSignInLink() {
   return (
     <p className="mt-6 rounded border border-dashed p-3 text-sm">
       Local development:{" "}
-      <a className="underline" href="/dev/sign-in">
+      <Link className="underline" href="/dev/sign-in" prefetch={false}>
         sign in as a test user
-      </a>
+      </Link>
     </p>
   );
 }
@@ -22,8 +24,8 @@ export function DevSignInLink() {
 export function DevSwitchUser() {
   if (!devSignInEnabled()) return null;
   return (
-    <a className="rounded border border-dashed px-2 py-1 text-xs underline" href="/dev/sign-in">
-      Dev: switch test user
-    </a>
+    <Link className="voice rounded border border-dashed border-line px-2 py-1 text-xs underline" href="/dev/sign-in" prefetch={false}>
+      dev: switch user
+    </Link>
   );
 }
