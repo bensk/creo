@@ -257,12 +257,12 @@ Each phase ends with a short demo to leadership and a written check against exit
 - [x] Repo, CI (lint, typecheck, test), docker compose Postgres
 - [x] Synthetic seed generator (realistic names, grades 5–8, four homerooms per grade, contacts, a persona for every role; each module adds its own history, e.g. a year of attendance/behavior, when its schema lands)
 - [x] Dev-only "sign in as a seeded user" for every role; compiled out of production builds, with CI proof
-- [ ] Google sign-in with domain restriction; staff sync from Directory; roles from Google Groups
+- [ ] Google sign-in with domain restriction; staff sync from Directory; roles from Google Groups — code and tests done; switches on with the OAuth client and Directory credentials (`docs/setup/google-cloud.md`)
 - [x] Permission layer + audit log (rows marked PROPOSED in `src/core/permissions/matrix.ts` await sign-off of the access matrix)
 - [x] `ai_grants` table (role and user grants, per-feature scope), `pnpm ai:grant` / `ai:revoke` / `ai:list` CLI, `AI_ENABLED` kill switch
-- [ ] Google Cloud project, Terraform for Cloud Run (app + worker), Cloud SQL HA, Secret Manager, Storage; staging and production
+- [ ] Google Cloud project, Terraform for Cloud Run (app + worker), Cloud SQL HA, Secret Manager, Storage; staging and production — Terraform, Dockerfile, and deploy workflow written and validated; not yet applied
 - [x] `school_id` on every school-data table (enforced by `src/core/db/schema-rules.test.ts`)
-- [ ] k6 load test: 500 concurrent users, homeroom-start burst
+- [ ] k6 load test: 500 concurrent users, homeroom-start burst — script and session minting done and run locally; run against staging once it exists
 - [x] App shell: sidebar, command palette, keyboard layer, `?` help sheet, light/dark, Creo tokens; English/Spanish (next-intl) in the student and family portals
 - [x] Module registry and `defineModule`
 - Exit: a staff member signs in, sees their role-appropriate shell, and every shortcut in CLAUDE.md works.
@@ -384,6 +384,7 @@ Not planned; add only if needed.
 22. A student's Google account links to their record by exact match on `students.google_email`, imported from the Big Data Tracker; the graduation-year OU is a cross-check, and a mismatch is flagged for ops, not blocked.
 23. The role and sensitivity matrix lives in one file, `src/core/permissions/matrix.ts`, mirroring the "Student Data Access Matrix" sign-off page (draft 1). Permissions are role → permission → scope (`all` or `homeroom`); sensitivity is role → levels for all students, plus levels for assigned students (teachers: `sensitive`). Fields with no declared sensitivity are hidden. Entries marked PROPOSED await sign-off by the Head of School and AP.
 24. AI is available to a user only when `AI_ENABLED` is not `false`, an `ANTHROPIC_API_KEY` is set, and a grant applies. Personal grant/revoke rows override role rows for the features they cover; at the same level revoke beats grant. `ai:revoke --user` ends the person's grants and records a personal revoke; `ai:revoke --role` ends the role's grants.
+25. Google sign-in uses `google-auth-library`, not Auth.js, so there is one session system (ADR 0002). Student sign-in checks the `/students` OU live in the Directory. Nightly jobs run as Cloud Run jobs started by Cloud Scheduler. Reset and seed are guarded by database name: only `creo_dev`, `*_test`, and confirmed `*_staging`.
 
 ## Open decisions
 

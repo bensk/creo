@@ -1,0 +1,91 @@
+name: Deploy
+
+# Staging deploys after CI passes on main. Production deploys only when started
+# by hand (Actions → Deploy → Run workflow → production), behind the
+# "production" GitHub environment's protection rules.
+#
+# Does nothing until these repository (or environment) variables exist, from
+# `terraform output` in infra/terraform:
+#   GCP_PROJECT_ID, GCP_REGION, GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_DEPLOYER_SERVICE_ACCOUNT
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Where to deploy
+        type: choice
+        options: [staging, production]
+        default: staging
+
+concurrency:
+  group: deploy-${{ github.event.inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    if: >-
+      (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+    env:
+      PROJECT: ${{ vars.GCP_PROJECT_ID }}
+      REGION: ${{ vars.GCP_REGION || 'us-east4' }}
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - name: Skip until Google Cloud is configured
+        if: env.PROJECT == ''
+        run: echo "GCP_PROJECT_ID is not set for this environment; nothing to deploy."
+
+      - uses: actions/checkout@v7
+        if: env.PROJECT != ''
+        with:
+          ref: ${{ env.SHA }}
+
+      - uses: google-github-actions/auth@v3
+        if: env.PROJECT != ''
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v3
+        if: env.PROJECT != ''
+
+      - name: Build and push images
+        if: env.PROJECT != ''
+        run: |
+          REPO="$REGION-docker.pkg.dev/$PROJECT/creo-sis"
+          gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+          docker build --target app -t "$REPO/app:$SHA" .
+          docker build --target tools -t "$REPO/tools:$SHA" .
+          docker push "$REPO/app:$SHA"
+          docker push "$REPO/tools:$SHA"
+
+      - name: Run migrations
+        if: env.PROJECT != ''
+        run: |
+          REPO="$REGION-docker.pkg.dev/$PROJECT/creo-sis"
+          gcloud run jobs update creo-sis-migrate --region "$REGION" --image "$REPO/tools:$SHA" --quiet
+          gcloud run jobs execute creo-sis-migrate --region "$REGION" --wait
+
+      - name: Update Directory sync job
+        if: env.PROJECT != ''
+        run: |
+          REPO="$REGION-docker.pkg.dev/$PROJECT/creo-sis"
+          if gcloud run jobs describe creo-sis-directory-sync --region "$REGION" >/dev/null 2>&1; then
+            gcloud run jobs update creo-sis-directory-sync --region "$REGION" --image "$REPO/tools:$SHA" --quiet
+          fi
+
+      - name: Deploy the app
+        if: env.PROJECT != ''
+        run: |
+          REPO="$REGION-docker.pkg.dev/$PROJECT/creo-sis"
+          gcloud run deploy creo-sis-app --region "$REGION" --image "$REPO/app:$SHA" --quiet

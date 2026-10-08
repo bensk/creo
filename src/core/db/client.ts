@@ -8,7 +8,9 @@ type Db = ReturnType<typeof drizzle>;
 const globalForDb = globalThis as unknown as { creoSql?: postgres.Sql; creoDb?: Db };
 
 export function getSql(): postgres.Sql {
-  globalForDb.creoSql ??= postgres(serverEnv().DATABASE_URL, { max: 10 });
+  // Per instance. Cloud Run runs up to 10 instances, so keep max × instances under
+  // Cloud SQL's connection limit.
+  globalForDb.creoSql ??= postgres(serverEnv().DATABASE_URL, { max: serverEnv().DB_POOL_MAX });
   return globalForDb.creoSql;
 }
 
