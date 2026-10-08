@@ -40,7 +40,7 @@ pnpm dev              # local dev server
 pnpm db:up            # start local Postgres (docker compose)
 pnpm db:migrate       # apply migrations (as the owner, MIGRATION_DATABASE_URL; the app connects as creo_app)
 pnpm db:generate      # generate a migration from schema changes
-pnpm db:seed          # load synthetic seed data (never real students)
+pnpm db:seed          # wipe the LOCAL dev database and load synthetic data (never real students); refuses any non-local database
 pnpm test             # vitest
 pnpm test:e2e         # playwright
 pnpm lint && pnpm typecheck
@@ -132,7 +132,7 @@ Memberships (homeroom, grade, section, group, enrollment status) are effective-d
 - Sessions are stored in the database and revocable: staff 7 days rolling, families 30 days per device, students until the end of the school day.
 - Dev sign-in (pick a seeded user) exists for local development only. It is compiled out of production builds, refuses to run unless the environment and database are local and seeded, and the app refuses to start if it is configured in production. Never weaken these guards; staging uses real Google sign-in.
 - Never log student PII to the console, error tracker, or analytics. Log IDs only.
-- Seed and test data are synthetic. Never commit real student data, OSIS numbers, or exports. `.gitignore` covers `data/`, `*.csv`, `*.xlsx`.
+- Seed and test data are synthetic. Never commit real student data, OSIS numbers, or exports. `.gitignore` covers `data/`, `*.csv`, `*.xlsx`. Seed OSIS numbers start with `999`, family emails use `example.com/.net/.org`, and phone numbers use the fictional `555-01xx` range. Each module seeds its own tables from a `seed.ts` registered in `src/core/seed/build.ts`; fixed test users (one per role) live in `src/core/seed/personas.ts`.
 
 ### AI features (Claude API) — optional
 

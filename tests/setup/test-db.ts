@@ -1,6 +1,5 @@
-import { drizzle } from "drizzle-orm/postgres-js";
-import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
+import { resetLocalDatabase } from "../../src/core/db/reset";
 
 // Vitest global setup: rebuild the test database from the migrations, as the
 // owner, before any test runs. Tests then connect as creo_app, so database
@@ -13,20 +12,7 @@ export default async function setup(): Promise<void> {
   }
   const sql = postgres(ownerUrl, { max: 1, onnotice: () => {} });
   try {
-    // CI's Postgres service has no init scripts, so make sure the app role exists.
-    await sql.unsafe(`
-      DO $$ BEGIN
-        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'creo_app') THEN
-          CREATE ROLE creo_app LOGIN PASSWORD 'creo_app';
-        END IF;
-      END $$;
-    `);
-    await sql.unsafe(`
-      DROP SCHEMA IF EXISTS drizzle CASCADE;
-      DROP SCHEMA public CASCADE;
-      CREATE SCHEMA public;
-    `);
-    await migrate(drizzle(sql), { migrationsFolder: "drizzle" });
+    await resetLocalDatabase(sql, ownerUrl);
   } finally {
     await sql.end();
   }

@@ -18,7 +18,8 @@
     "db:up": "docker compose up -d --wait postgres",
     "db:down": "docker compose down",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "tsx src/core/seed/index.ts"
   },
   "dependencies": {
     "drizzle-orm": "~0.45.3",
