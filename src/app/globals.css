@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+/* Placeholder brand tokens. The full Creo design system (expanded palette,
+   typography, dark mode) is applied in the app shell step. Never hardcode hex
+   values in components; use these tokens. */
+@theme {
+  --color-brand-orange: #ffb12a;
+  --color-brand-charcoal: #434350;
+  --color-brand-blue: #007bff;
+}
