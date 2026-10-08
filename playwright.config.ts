@@ -21,6 +21,7 @@ export default defineConfig({
     env: {
       // The seeded local dev database (pnpm db:seed), as the app role.
       DATABASE_URL: process.env.DATABASE_URL ?? "postgres://creo_app:creo_app@localhost:5432/creo_dev",
+      DEV_SIGN_IN: "true",
     },
   },
 });

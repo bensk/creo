@@ -46,6 +46,8 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - name: Prove dev sign-in is absent from the production build
+        run: pnpm test:prod-guards
 
   e2e:
     name: Playwright

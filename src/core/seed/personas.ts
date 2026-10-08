@@ -1,4 +1,5 @@
 import type { StaffRole } from "../db/columns";
+import { emailSlug } from "./names";
 
 // Fixed test users, one for every role plus the "should be refused" cases. Dev
 // sign-in lists these. Every other seeded person is generated.
@@ -117,3 +118,16 @@ export const FAMILY_PERSONAS: readonly FamilyPersona[] = [
 export const STAFF_PARENT_CONTACT_EMAIL = "gabriela.santos.home@example.com";
 
 export const ALL_PERSONAS: readonly Persona[] = [...STAFF_PERSONAS, STUDENT_PERSONA, ...FAMILY_PERSONAS];
+
+/**
+ * The sign-in email the seed gives each test user. Staff and students use their
+ * Workspace address; families use the contact email.
+ */
+export function personaEmail(persona: Persona): string {
+  if (persona.kind === "staff") return `${emailSlug(persona.givenName, persona.familyName)}@creoprep.org`;
+  if (persona.kind === "student") {
+    const gradYear = String((2027 + (8 - persona.grade)) % 100);
+    return `${emailSlug(persona.firstName, persona.lastName)}.${gradYear}@creoprep.org`;
+  }
+  return persona.email;
+}

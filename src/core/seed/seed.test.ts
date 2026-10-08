@@ -4,7 +4,7 @@ import { getDb, getSql } from "../db/client";
 import { isDatabaseSynthetic } from "../db/synthetic";
 import { buildSeed } from "./build";
 import { HOMEROOMS } from "./names";
-import { ALL_PERSONAS, STAFF_PERSONAS, STUDENT_PERSONA } from "./personas";
+import { ALL_PERSONAS, personaEmail, STAFF_PERSONAS, STUDENT_PERSONA } from "./personas";
 import { writeSeed } from "./write";
 
 afterAll(async () => {
@@ -32,6 +32,14 @@ describe("seed data", () => {
     expect(rowsOf("students").some((s) => s.preferredFirstName === STUDENT_PERSONA.preferredFirstName)).toBe(true);
     const contactEmails = new Set(rowsOf("contacts").map((c) => c.email));
     for (const p of ALL_PERSONAS) if (p.kind === "family") expect(contactEmails).toContain(p.email);
+  });
+
+  it("gives every test user who can sign in a login with the expected email", () => {
+    const logins = new Set(rowsOf("users").map((u) => u.email));
+    for (const p of ALL_PERSONAS) {
+      const canSignIn = !(p.kind === "family" && !p.portalAccess);
+      expect(logins.has(personaEmail(p)), p.key).toBe(canSignIn);
+    }
   });
 
   it("gives the no-role test user no roles", () => {

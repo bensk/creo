@@ -42,7 +42,8 @@ pnpm db:migrate       # apply migrations (as the owner, MIGRATION_DATABASE_URL; 
 pnpm db:generate      # generate a migration from schema changes
 pnpm db:seed          # wipe the LOCAL dev database and load synthetic data (never real students); refuses any non-local database
 pnpm test             # vitest
-pnpm test:e2e         # playwright
+pnpm test:e2e         # playwright (uses the seeded dev database)
+pnpm test:prod-guards # after pnpm build: proves dev sign-in is absent from the production build
 pnpm lint && pnpm typecheck
 ```
 
@@ -130,7 +131,7 @@ Memberships (homeroom, grade, section, group, enrollment status) are effective-d
 - Sensitive fields (IEP/504 status, ELL status, health, discipline narratives, family situation notes) carry a `sensitivity` level and are hidden unless the role grants it. This applies to grids, exports, dashboards, and AI prompts.
 - Every write is recorded in `audit_log` (who, what, before, after, when), in the same transaction as the write. Reads of sensitive fields and all exports are logged too. The audit log is append-only (the app's database role cannot update or delete it), kept forever, and readable only by `admin` and `leader`, with values redacted to the reader's sensitivity level.
 - Sessions are stored in the database and revocable: staff 7 days rolling, families 30 days per device, students until the end of the school day. Every page and server action calls `requireViewer(surface)` from `core/auth/server.ts`; `src/proxy.ts` only redirects requests with no cookie and is never the access check. Every sign-in method ends in `createSession`, so permissions and auditing don't depend on how someone signed in.
-- Dev sign-in (pick a seeded user) exists for local development only. It is compiled out of production builds, refuses to run unless the environment and database are local and seeded, and the app refuses to start if it is configured in production. Never weaken these guards; staging uses real Google sign-in.
+- Dev sign-in (pick a seeded user at `/dev/sign-in`, with `DEV_SIGN_IN=true` in `.env.local`) exists for local development only. Its route files are named `*.dev.tsx`, which `next.config.ts` only compiles under `next dev`; it refuses to run unless the database is local and seeded; and the server exits at startup if `DEV_SIGN_IN` is set in production (`src/instrumentation-node.ts`). CI proves all of this with `pnpm test:prod-guards`. Never weaken these guards; staging uses real Google sign-in. Test users are listed in `src/core/seed/personas.ts`.
 - Never log student PII to the console, error tracker, or analytics. Log IDs only.
 - Seed and test data are synthetic. Never commit real student data, OSIS numbers, or exports. `.gitignore` covers `data/`, `*.csv`, `*.xlsx`. Seed OSIS numbers start with `999`, family emails use `example.com/.net/.org`, and phone numbers use the fictional `555-01xx` range. Each module seeds its own tables from a `seed.ts` registered in `src/core/seed/build.ts`; fixed test users (one per role) live in `src/core/seed/personas.ts`.
 
