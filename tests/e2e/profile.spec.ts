@@ -67,3 +67,29 @@ test("supports show only to staff who may see them for that student", async ({ p
   await expect(page.getByRole("heading", { name: "Supports" })).toBeVisible();
   await expect(page.getByText("English learner")).toBeVisible();
 });
+
+test("every staff member sees the medical alert; only some see health and demographics", async ({ page }) => {
+  const open = async (query: string, name: RegExp) => {
+    await page.keyboard.press("ControlOrMeta+k");
+    await page.keyboard.type(query);
+    await page.getByRole("option", { name }).click();
+    await page.waitForURL(/\/students\/[0-9a-f-]{36}$/);
+  };
+  // Mateo (5th grade) isn't the Syracuse teacher's student.
+  await signInAs(page, /^Teacher \(7th grade, Syracuse homeroom\)/);
+  await open("mateo martinez", /Mateo Martinez/);
+  await expect(page.getByRole("note")).toContainText("Severe peanut allergy");
+  await expect(page.getByRole("heading", { name: "Health" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Demographics" })).toHaveCount(0);
+
+  await signInAs(page, /^Support \(counselor\)/);
+  await open("mateo martinez", /Mateo Martinez/);
+  await expect(page.getByRole("heading", { name: "Health" })).toBeVisible();
+  await expect(page.locator("section", { has: page.getByRole("heading", { name: "Health" }) })).toContainText("EpiPen");
+
+  await signInAs(page, /^Ops/);
+  await open("cami mart", /Cami Martinez/);
+  await expect(page.getByRole("heading", { name: "Demographics" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Health" })).toHaveCount(0);
+  await expect(page.getByText("photos: ask family first")).toBeVisible();
+});

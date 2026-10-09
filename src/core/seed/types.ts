@@ -41,6 +41,7 @@ export interface StudentPlacement {
   /** Personas and the staff-parent's child keep a fixed homeroom. */
   fixed: boolean;
   firstName: string;
+  pronouns: string;
   familyLanguage: "en" | "es";
 }
 

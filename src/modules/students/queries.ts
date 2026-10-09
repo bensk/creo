@@ -2,7 +2,7 @@ import { and, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import { currentOn, schoolToday } from "@/core/db/dates";
 import type { Db } from "@/core/db/types";
 import { schools } from "@/core/identity/schema";
-import { contacts, enrollments, namePronunciations, studentContacts, studentSupports, students } from "./schema";
+import { contacts, enrollments, namePronunciations, studentContacts, studentDemographics, studentHealth, studentSupports, students } from "./schema";
 
 // Public queries other modules and core may use. Nothing outside this module
 // reads its tables directly.
@@ -146,5 +146,17 @@ export async function currentPronunciation(db: Db, studentId: string) {
     .where(eq(namePronunciations.studentId, studentId))
     .orderBy(sql`${namePronunciations.createdAt} desc`)
     .limit(1);
+  return row ?? null;
+}
+
+/** Health row (sensitive): read through readForViewer. */
+export async function healthForStudent(db: Db, studentId: string) {
+  const [row] = await db.select().from(studentHealth).where(eq(studentHealth.studentId, studentId));
+  return row ?? null;
+}
+
+/** Demographics row (restricted): read through readForViewer. */
+export async function demographicsForStudent(db: Db, studentId: string) {
+  const [row] = await db.select().from(studentDemographics).where(eq(studentDemographics.studentId, studentId));
   return row ?? null;
 }

@@ -106,3 +106,42 @@ describe("flattenProperty", () => {
     expect(flattenProperty({ type: "people", people: [] })).toBeNull();
   });
 });
+
+describe("health, demographics, and consent", () => {
+  it("reads the enrollment-form answers into health fields", () => {
+    const r = mapBdtRow(page({
+      ...base,
+      Allergies: ["My child has allergies", "My child has an EpiPen which I will be providing."],
+      "Allergen/Reaction/Treatment": "Peanuts / hives / EpiPen",
+      Asthma: ["My child has the following food restrictions"],
+      "Lunch Accommodations": ["Dairy Free"],
+      "Allergy MAF": "Recieved", "Asthma MAF": "Missing Asthma MAF", "General MAF": "N/A",
+      Immunization: ["ATS Done", "Received"], "Immunization Date": { start: "2026-08-20", end: null },
+      Physical: ["ATS Needed", "Appt Scheduled"],
+    }), 1);
+    if (!r.ok) throw new Error(r.error);
+    expect(r.student.health).toEqual({
+      hasAllergies: true, allergyDetails: "Peanuts / hives / EpiPen", epipen: true, allergyMedication: false,
+      foodRestrictions: true, lunchAccommodations: ["Dairy Free"], allergyForm: "received", asthmaForm: "missing",
+      generalForm: "not_needed", immunizationStatus: "received", immunizationDate: "2026-08-20",
+      physicalStatus: "appointment_scheduled", physicalDate: null,
+    });
+  });
+
+  it("records 'no known allergies' as false and leaves empty health as null", () => {
+    const none = mapBdtRow(page({ ...base, Allergies: ["My child has NO known allergies."], Asthma: ["My child has NO specific food restrictions."] }), 1);
+    expect(none.ok && none.student.health).toMatchObject({ hasAllergies: false, foodRestrictions: false });
+    const empty = mapBdtRow(page(base), 1);
+    expect(empty.ok && empty.student.health).toBeNull();
+  });
+
+  it("reads demographics; the meal column is the form's status, not eligibility", () => {
+    const r = mapBdtRow(page({ ...base, Gender: "F", Ethnicity: ["Hispanic/Latino"], "Home Address": "1 Test Pl, Bronx, NY 10454", "FRP (meals)": ["ATS Done", "Received"] }), 1);
+    expect(r.ok && r.student.demographics).toEqual({ gender: "F", ethnicity: ["Hispanic/Latino"], homeAddress: "1 Test Pl, Bronx, NY 10454", mealFormStatus: "received" });
+  });
+
+  it.each([["No", "no"], ["Ask first", "ask_first"], [null, null]] as const)("maps media consent %s", (value, expected) => {
+    const r = mapBdtRow(page({ ...base, "Social Media": value }), 1);
+    expect(r.ok && r.student.mediaConsent).toBe(expected);
+  });
+});

@@ -41,12 +41,17 @@ export const students = pgTable(
     photoObjectKey: text("photo_object_key"),
     // Optimistic concurrency for grid edits: an update must name the version it read.
     version: integer("version").notNull().default(1),
+    // Photo and media consent: yes, no, ask_first; null = unknown (treat as "ask first").
+    mediaConsent: text("media_consent"),
+    // One line every supervising adult must know, e.g. "Severe peanut allergy, EpiPen in nurse's office". Standard sensitivity.
+    medicalAlert: text("medical_alert"),
   },
   (t) => [
     uniqueIndex("students_school_osis_idx").on(t.schoolId, t.osis),
     uniqueIndex("students_school_google_email_idx").on(t.schoolId, t.googleEmail),
     index("students_created_by_idx").on(t.createdBy),
     check("students_osis_check", sql.raw(`osis is null or osis ~ '^[0-9]{9}$'`)),
+    check("students_media_consent_check", sql.raw(`media_consent is null or media_consent in ('yes', 'no', 'ask_first')`)),
   ],
 );
 
@@ -223,5 +228,71 @@ export const customFieldDefinitions = pgTable(
     check("custom_field_definitions_type_check", sql.raw(`type in (${sqlList(CUSTOM_FIELD_TYPES)})`)),
     check("custom_field_definitions_key_check", sql.raw(`key ~ '^[a-z][a-z0-9_]{0,62}$'`)),
     check("custom_field_definitions_sensitivity_check", sql.raw(`sensitivity in (${sqlList(SENSITIVITY_LEVELS)})`)),
+  ],
+);
+
+const FORM_STATUS = `in ('received', 'missing', 'not_needed')`;
+const VISIT_STATUS = `in ('received', 'appointment_scheduled', 'missing')`;
+
+// Health information, one row per student (history in the audit log). Every
+// column is sensitive. The short medical alert that all staff see lives on students.
+export const studentHealth = pgTable(
+  "student_health",
+  {
+    ...base(),
+    studentId: uuid("student_id")
+      .notNull()
+      .unique()
+      .references(() => students.id),
+    hasAllergies: boolean("has_allergies"),
+    allergyDetails: text("allergy_details"),
+    epipen: boolean("epipen").notNull().default(false),
+    allergyMedication: boolean("allergy_medication").notNull().default(false),
+    foodRestrictions: boolean("food_restrictions"),
+    lunchAccommodations: text("lunch_accommodations").array().notNull().default(sql`'{}'::text[]`),
+    allergyForm: text("allergy_form"),
+    asthmaForm: text("asthma_form"),
+    generalForm: text("general_form"),
+    immunizationStatus: text("immunization_status"),
+    immunizationDate: date("immunization_date"),
+    physicalStatus: text("physical_status"),
+    physicalDate: date("physical_date"),
+    source: text("source").notNull().default("manual"),
+  },
+  (t) => [
+    index("student_health_school_idx").on(t.schoolId),
+    index("student_health_created_by_idx").on(t.createdBy),
+    check("student_health_allergy_form_check", sql.raw(`allergy_form is null or allergy_form ${FORM_STATUS}`)),
+    check("student_health_asthma_form_check", sql.raw(`asthma_form is null or asthma_form ${FORM_STATUS}`)),
+    check("student_health_general_form_check", sql.raw(`general_form is null or general_form ${FORM_STATUS}`)),
+    check("student_health_immunization_check", sql.raw(`immunization_status is null or immunization_status ${VISIT_STATUS}`)),
+    check("student_health_physical_check", sql.raw(`physical_status is null or physical_status ${VISIT_STATUS}`)),
+    check("student_health_source_check", sql.raw(`source in ('manual', 'import')`)),
+  ],
+);
+
+// Demographics and address, one row per student. Restricted (ops, leaders,
+// support, admin); needed for state reporting. The meal column is the status of
+// the school meal form, not eligibility, so no income data is stored.
+export const studentDemographics = pgTable(
+  "student_demographics",
+  {
+    ...base(),
+    studentId: uuid("student_id")
+      .notNull()
+      .unique()
+      .references(() => students.id),
+    gender: text("gender"),
+    ethnicity: text("ethnicity").array().notNull().default(sql`'{}'::text[]`),
+    homeAddress: text("home_address"),
+    mealFormStatus: text("meal_form_status"),
+    source: text("source").notNull().default("manual"),
+  },
+  (t) => [
+    index("student_demographics_school_idx").on(t.schoolId),
+    index("student_demographics_created_by_idx").on(t.createdBy),
+    check("student_demographics_gender_check", sql.raw(`gender is null or gender in ('F', 'M', 'X')`)),
+    check("student_demographics_meal_form_check", sql.raw(`meal_form_status is null or meal_form_status in ('received', 'missing')`)),
+    check("student_demographics_source_check", sql.raw(`source in ('manual', 'import')`)),
   ],
 );

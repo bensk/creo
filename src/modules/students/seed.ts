@@ -7,7 +7,9 @@ import {
 } from "../../core/seed/personas";
 import type { Rng } from "../../core/seed/random";
 import { GRADES, type Grade, type SeedBatch, type SeedContext, type StudentPlacement } from "../../core/seed/types";
-import { contacts, enrollments, namePronunciations, studentContacts, studentSupports, students } from "./schema";
+import {
+  contacts, enrollments, namePronunciations, studentContacts, studentDemographics, studentHealth, studentSupports, students,
+} from "./schema";
 
 export const STUDENTS_PER_HOMEROOM = 25;
 const WITHDRAWN_COUNT = 3;
@@ -167,7 +169,7 @@ export function buildStudentsSeed(ctx: SeedContext): { batches: SeedBatch[]; pla
         dateOfBirth: birthDate(rng, c.grade), osis: `${OSIS_PREFIX}${osis++}`, googleEmail,
       });
       placements.push({
-        studentId, grade: c.grade, homeroom: c.homeroom, fixed: c.fixed, firstName: c.firstName,
+        studentId, grade: c.grade, homeroom: c.homeroom, fixed: c.fixed, firstName: c.firstName, pronouns: c.pronouns,
         familyLanguage: family.contacts[0]?.language ?? "en",
       });
       return studentId;
@@ -214,6 +216,11 @@ export function buildStudentsSeed(ctx: SeedContext): { batches: SeedBatch[]; pla
   }
 
   const { supports, pronunciations } = buildSupportsAndNames(ctx, placements);
+  const { health, demographics, alerts, consent } = buildHealthAndDemographics(ctx, placements);
+  for (const row of studentRows) {
+    row.medicalAlert = alerts.get(row.id as string) ?? null;
+    row.mediaConsent = consent.get(row.id as string) ?? null;
+  }
 
   return {
     batches: [
@@ -224,6 +231,8 @@ export function buildStudentsSeed(ctx: SeedContext): { batches: SeedBatch[]; pla
       { table: enrollments, rows: enrollmentRows },
       { table: studentSupports, rows: supports },
       { table: namePronunciations, rows: pronunciations },
+      { table: studentHealth, rows: health },
+      { table: studentDemographics, rows: demographics },
     ],
     placements,
   };
@@ -280,4 +289,52 @@ function buildSupportsAndNames(ctx: SeedContext, placements: readonly StudentPla
     }
   }
   return { supports, pronunciations };
+}
+
+const ETHNICITIES = ["Hispanic/Latino", "Black or African American", "Asian", "Two or more races", "Caucasian", "Other"];
+
+/**
+ * Health (about a quarter of students have something on file), demographics
+ * for everyone, medical alerts for EpiPen carriers, and media consent.
+ * Fixed: Mateo has a peanut allergy alert (so the Syracuse teacher sees an
+ * alert without seeing health details); Cami's consent is "ask first".
+ * Addresses use "Example Ave" so they can't be real.
+ */
+function buildHealthAndDemographics(ctx: SeedContext, placements: readonly StudentPlacement[]) {
+  const { rng } = ctx;
+  const by = { schoolId: ctx.schoolId, createdBy: ctx.systemUserId };
+  const health: Record<string, unknown>[] = [];
+  const demographics: Record<string, unknown>[] = [];
+  const alerts = new Map<string, string>();
+  const consent = new Map<string, string | null>();
+  const form = () => rng.pick(["received", "received", "received", "missing", "not_needed"]);
+
+  for (const p of placements) {
+    const isMateo = p.fixed && p.firstName === "Mateo";
+    const isCami = p.fixed && p.firstName === "Camila";
+    const allergic = isMateo || (!p.fixed && rng.chance(0.12));
+    const epipen = isMateo || (allergic && rng.chance(0.4));
+    if (allergic || rng.chance(0.15)) {
+      health.push({
+        id: rng.uuid(), ...by, studentId: p.studentId, hasAllergies: allergic,
+        allergyDetails: allergic ? (isMateo ? "Peanuts / hives and swelling / EpiPen, call 911" : rng.pick(["Tree nuts / hives / Benadryl", "Shellfish / swelling / EpiPen", "Penicillin / rash / avoid"])) : null,
+        epipen, allergyMedication: allergic && !epipen && rng.chance(0.5), foodRestrictions: rng.chance(0.1),
+        lunchAccommodations: rng.chance(0.06) ? [rng.pick(["Gluten Free", "Dairy Free", "Egg Free"])] : [],
+        allergyForm: allergic ? form() : null, asthmaForm: rng.chance(0.08) ? form() : null, generalForm: form(),
+        immunizationStatus: rng.pick(["received", "received", "received", "missing", "appointment_scheduled"]),
+        immunizationDate: "2026-08-15", physicalStatus: rng.pick(["received", "received", "missing"]), physicalDate: "2026-08-01",
+        source: "manual",
+      });
+    }
+    if (epipen) alerts.set(p.studentId, isMateo ? "Severe peanut allergy. EpiPen in the nurse's office." : "Severe allergy. EpiPen in the nurse's office.");
+
+    demographics.push({
+      id: rng.uuid(), ...by, studentId: p.studentId,
+      gender: p.pronouns === "she/her" ? "F" : p.pronouns === "he/him" ? "M" : "X",
+      ethnicity: [rng.pick(ETHNICITIES)], homeAddress: `${rng.int(100, 999)} Example Ave, Bronx, NY 1045${rng.int(1, 9)}`,
+      mealFormStatus: rng.chance(0.85) ? "received" : "missing", source: "manual",
+    });
+    consent.set(p.studentId, isCami ? "ask_first" : rng.pick(["yes", "yes", "yes", "yes", "yes", "yes", "yes", "no", "ask_first", null]));
+  }
+  return { health, demographics, alerts, consent };
 }

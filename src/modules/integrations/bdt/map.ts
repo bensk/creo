@@ -34,8 +34,54 @@ export interface BdtStudent {
   /** From the IEP column. "evaluation" = no IEP, family interested in an evaluation (not stored as a support). */
   support: { type: "iep" | "504"; details: string | null } | null;
   accommodations: string[];
+  mediaConsent: "no" | "ask_first" | null;
+  health: BdtHealth | null;
+  demographics: BdtDemographics | null;
   /** Guardian emails we couldn't store (creoprep.org addresses), counted for ops. */
   droppedStaffEmails: number;
+}
+
+export type FormStatus = "received" | "missing" | "not_needed";
+export type VisitStatus = "received" | "appointment_scheduled" | "missing";
+
+export interface BdtHealth {
+  hasAllergies: boolean | null;
+  allergyDetails: string | null;
+  epipen: boolean;
+  allergyMedication: boolean;
+  foodRestrictions: boolean | null;
+  lunchAccommodations: string[];
+  allergyForm: FormStatus | null;
+  asthmaForm: FormStatus | null;
+  generalForm: FormStatus | null;
+  immunizationStatus: VisitStatus | null;
+  immunizationDate: string | null;
+  physicalStatus: VisitStatus | null;
+  physicalDate: string | null;
+}
+
+export interface BdtDemographics {
+  gender: "F" | "M" | "X" | null;
+  ethnicity: string[];
+  homeAddress: string | null;
+  mealFormStatus: "received" | "missing" | null;
+}
+
+/** "Recieved" (as the tracker spells it) / "Received" → received; "Missing …" → missing; "N/A" → not needed. */
+export function formStatus(value: string | null): FormStatus | null {
+  if (!value) return null;
+  if (/^rec(ie|ei)ved$/i.test(value.trim())) return "received";
+  if (/^missing/i.test(value.trim())) return "missing";
+  if (/^n\/?a$/i.test(value.trim())) return "not_needed";
+  return null;
+}
+
+/** Immunization or physical status from the tracker's checklist; the furthest step wins. ATS entry flags are ignored. */
+export function visitStatus(values: string[]): VisitStatus | null {
+  if (values.some((v) => /^rec(ie|ei)ved$/i.test(v))) return "received";
+  if (values.some((v) => /appt|appointment/i.test(v))) return "appointment_scheduled";
+  if (values.some((v) => /^missing/i.test(v))) return "missing";
+  return null;
 }
 
 export type MapResult = { ok: true; student: BdtStudent } | { ok: false; error: string };
@@ -131,9 +177,53 @@ export function mapBdtRow(page: NotionPage, rowNumber: number): MapResult {
     : iep === "504" ? { type: "504" as const, details: null }
     : null;
 
+  // Health. The "Allergies" and "Asthma" columns hold the family's answers on the
+  // enrollment form; "Asthma" is actually the food-restrictions question.
+  const allergyAnswers = list(p["Allergies"]);
+  const foodAnswers = list(p["Asthma"]);
+  const health: BdtHealth = {
+    hasAllergies: allergyAnswers.some((a) => /NO known allergies/i.test(a))
+      ? false
+      : allergyAnswers.some((a) => /has allergies|medication|EpiPen/i.test(a)) ? true : null,
+    allergyDetails: str(p["Allergen/Reaction/Treatment"]),
+    epipen: allergyAnswers.some((a) => /EpiPen/i.test(a)),
+    allergyMedication: allergyAnswers.some((a) => /medication/i.test(a)),
+    foodRestrictions: foodAnswers.some((a) => /NO specific food restrictions/i.test(a))
+      ? false
+      : foodAnswers.some((a) => /following food restrictions/i.test(a)) ? true : null,
+    lunchAccommodations: list(p["Lunch Accommodations"]),
+    allergyForm: formStatus(str(p["Allergy MAF"])),
+    asthmaForm: formStatus(str(p["Asthma MAF"])),
+    generalForm: formStatus(str(p["General MAF"])),
+    immunizationStatus: visitStatus(list(p["Immunization"])),
+    immunizationDate: dateOf(p["Immunization Date"]),
+    physicalStatus: visitStatus(list(p["Physical"])),
+    physicalDate: dateOf(p["Physical Date"]),
+  };
+  // An explicit "no" (no known allergies) is information; only all-blank means no health data.
+  const hasHealth =
+    health.epipen || health.allergyMedication ||
+    Object.entries(health).some(([k, v]) => k !== "epipen" && k !== "allergyMedication" && (Array.isArray(v) ? v.length > 0 : v !== null));
+
+  const genderText = str(p["Gender"]);
+  const meals = list(p["FRP (meals)"]);
+  const demographics: BdtDemographics = {
+    gender: genderText === "F" || genderText === "M" || genderText === "X" ? genderText : null,
+    ethnicity: list(p["Ethnicity"]),
+    homeAddress: str(p["Home Address"]),
+    mealFormStatus: meals.some((m) => /^received$/i.test(m)) ? "received" : meals.some((m) => /^missing$/i.test(m)) ? "missing" : null,
+  };
+  const hasDemographics = Object.values(demographics).some((v) => (Array.isArray(v) ? v.length > 0 : v !== null));
+
+  const consent = str(p["Social Media"]);
+  const mediaConsent = consent === "No" ? "no" : consent === "Ask first" ? "ask_first" : null;
+
   return {
     ok: true,
     student: {
+      mediaConsent,
+      health: hasHealth ? health : null,
+      demographics: hasDemographics ? demographics : null,
       pageId: page.id,
       legalFirstName: first,
       legalLastName: last,

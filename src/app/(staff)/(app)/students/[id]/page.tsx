@@ -6,12 +6,15 @@ import { can, visibleLevels } from "@/core/permissions";
 import { readForViewer } from "@/core/permissions/read";
 import { StudentName } from "@/core/ui/StudentName";
 import { membershipsForStudent } from "@/modules/cohorts/queries";
-import { contactsForStudent, currentPronunciation, enrollmentHistory, getStudent, supportsForStudent } from "@/modules/students/queries";
+import {
+  contactsForStudent, currentPronunciation, demographicsForStudent, enrollmentHistory, getStudent, healthForStudent, supportsForStudent,
+} from "@/modules/students/queries";
 
 export const metadata = { title: "Student" };
 
 const date = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 const fmt = (d: string | null) => (d ? date.format(new Date(`${d}T00:00:00Z`)) : null);
+const VISIT: Record<string, string> = { received: "Received", appointment_scheduled: "Appointment scheduled", missing: "Missing" };
 const SUPPORT_LABEL: Record<string, string> = { iep: "IEP", "504": "504 plan", ell: "English learner", other: "Other support" };
 const GROUP_KIND: Record<string, string> = {
   homeroom: "homeroom", grade_team: "grade team", advisory: "advisory", intervention: "intervention",
@@ -40,6 +43,12 @@ export default async function StudentProfile({ params }: { params: Promise<{ id:
   const supports = levels.has("sensitive")
     ? await Promise.all((await supportsForStudent(db, row.id)).map((s) => readForViewer(db, viewer, "student_supports", row.id, s, { entityId: s.id })))
     : null;
+  const healthRow = levels.has("sensitive") ? await healthForStudent(db, row.id) : null;
+  const health = healthRow ? await readForViewer(db, viewer, "student_health", row.id, healthRow, { entityId: healthRow.id }) : null;
+  const demographicsRow = levels.has("restricted") ? await demographicsForStudent(db, row.id) : null;
+  const demographics = demographicsRow
+    ? await readForViewer(db, viewer, "student_demographics", row.id, demographicsRow, { entityId: demographicsRow.id })
+    : null;
 
   const current = enrollments.find((e) => e.status === "active" && !e.exitDate);
   const homeroom = memberships.find((m) => m.current && m.type === "homeroom");
@@ -63,9 +72,20 @@ export default async function StudentProfile({ params }: { params: Promise<{ id:
             .filter(Boolean)
             .join(" · ")}
         </p>
-        {!current && (
-          <p className="w-fit rounded-md border-2 border-amber bg-surface-raised px-3 py-1 text-sm">
-            Not currently enrolled
+        <div className="flex flex-wrap items-center gap-2">
+          {!current && (
+            <p className="w-fit rounded-md border-2 border-amber bg-surface-raised px-3 py-1 text-sm">
+              Not currently enrolled
+            </p>
+          )}
+          <p className="voice w-fit rounded-md border border-line-soft px-2 py-1 text-xs text-ink-muted">
+            {row.mediaConsent === "yes" ? "photos ok" : row.mediaConsent === "no" ? "no photos" : row.mediaConsent === "ask_first" ? "photos: ask family first" : "photo consent unknown: ask first"}
+          </p>
+        </div>
+        {row.medicalAlert && (
+          <p role="note" className="flex gap-3 rounded-md border-2 border-crimson bg-surface-raised px-4 py-3 font-medium text-ink-title">
+            <span className="voice shrink-0 font-normal text-ink-muted">medical alert</span>
+            <span>{row.medicalAlert}</span>
           </p>
         )}
       </header>
@@ -103,6 +123,41 @@ export default async function StudentProfile({ params }: { params: Promise<{ id:
                   ))}
                 </ul>
               )}
+            </section>
+          )}
+
+          {health && (
+            <section aria-labelledby="health-h" className="grid gap-3">
+              <div className="flex items-baseline justify-between gap-2">
+                <h2 id="health-h" className="text-lg font-semibold">Health</h2>
+                <span className="voice text-xs text-ink-muted">sensitive. viewing this is logged.</span>
+              </div>
+              <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-lg border border-line-soft p-4 text-sm">
+                <dt className="voice text-ink-muted">allergies</dt>
+                <dd>
+                  {health.hasAllergies === true ? "Yes" : health.hasAllergies === false ? "No known allergies" : "Not recorded"}
+                  {health.epipen ? " · EpiPen" : ""}
+                  {health.allergyMedication ? " · medication" : ""}
+                  {health.allergyDetails && <span className="block">{health.allergyDetails}</span>}
+                </dd>
+                {(health.foodRestrictions || (health.lunchAccommodations?.length ?? 0) > 0) && (
+                  <>
+                    <dt className="voice text-ink-muted">lunch</dt>
+                    <dd>{[health.foodRestrictions ? "Food restrictions" : null, ...(health.lunchAccommodations ?? [])].filter(Boolean).join(" · ")}</dd>
+                  </>
+                )}
+                <dt className="voice text-ink-muted">forms</dt>
+                <dd>
+                  {[["allergy", health.allergyForm], ["asthma", health.asthmaForm], ["general", health.generalForm]]
+                    .filter(([, v]) => v)
+                    .map(([k, v]) => `${k}: ${v === "received" ? "received" : v === "missing" ? "missing" : "not needed"}`)
+                    .join(" · ") || "—"}
+                </dd>
+                <dt className="voice text-ink-muted">immunizations</dt>
+                <dd>{VISIT[health.immunizationStatus ?? ""] ?? "—"}{health.immunizationDate ? ` · ${fmt(health.immunizationDate)}` : ""}</dd>
+                <dt className="voice text-ink-muted">physical</dt>
+                <dd>{VISIT[health.physicalStatus ?? ""] ?? "—"}{health.physicalDate ? ` · ${fmt(health.physicalDate)}` : ""}</dd>
+              </dl>
             </section>
           )}
 
@@ -195,6 +250,23 @@ export default async function StudentProfile({ params }: { params: Promise<{ id:
               </details>
             )}
           </section>
+
+          {demographics && (
+            <section aria-labelledby="demo-h" className="grid gap-2">
+              <h2 id="demo-h" className="text-lg font-semibold">Demographics</h2>
+              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+                <dt className="voice text-ink-muted">gender</dt>
+                <dd>{demographics.gender ?? "—"}</dd>
+                <dt className="voice text-ink-muted">ethnicity</dt>
+                <dd>{demographics.ethnicity?.join(", ") || "—"}</dd>
+                <dt className="voice text-ink-muted">address</dt>
+                <dd>{demographics.homeAddress ?? "—"}</dd>
+                <dt className="voice text-ink-muted">meal form</dt>
+                <dd>{demographics.mealFormStatus === "received" ? "Received" : demographics.mealFormStatus === "missing" ? "Missing" : "—"}</dd>
+              </dl>
+              <p className="voice text-xs text-ink-muted">restricted. viewing this is logged.</p>
+            </section>
+          )}
 
           {(student.osis !== undefined || student.dateOfBirth !== undefined) && (
             <section aria-labelledby="ids-h" className="grid gap-2">

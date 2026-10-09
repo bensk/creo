@@ -19,6 +19,8 @@ export const manifest = defineModule({
       userId: "standard", legalFirstName: "standard", legalLastName: "standard", preferredFirstName: "standard",
       preferredLastName: "standard", pronouns: "standard", googleEmail: "standard", custom: "standard",
       osis: "restricted", dateOfBirth: "restricted", photoObjectKey: "standard", version: "standard",
+      // Everyone who takes photos or supervises needs these (access matrix question 1, approved by Ben).
+      mediaConsent: "standard", medicalAlert: "standard",
     },
     contacts: {
       id: "standard", schoolId: "standard", createdAt: "standard", updatedAt: "standard", createdBy: "standard",
@@ -36,6 +38,18 @@ export const manifest = defineModule({
       id: "sensitive", schoolId: "sensitive", createdAt: "sensitive", updatedAt: "sensitive", createdBy: "sensitive",
       studentId: "sensitive", type: "sensitive", details: "sensitive", accommodations: "sensitive",
       startsOn: "sensitive", endsOn: "sensitive", source: "sensitive",
+    },
+    student_health: {
+      id: "sensitive", schoolId: "sensitive", createdAt: "sensitive", updatedAt: "sensitive", createdBy: "sensitive",
+      studentId: "sensitive", hasAllergies: "sensitive", allergyDetails: "sensitive", epipen: "sensitive",
+      allergyMedication: "sensitive", foodRestrictions: "sensitive", lunchAccommodations: "sensitive",
+      allergyForm: "sensitive", asthmaForm: "sensitive", generalForm: "sensitive", immunizationStatus: "sensitive",
+      immunizationDate: "sensitive", physicalStatus: "sensitive", physicalDate: "sensitive", source: "sensitive",
+    },
+    student_demographics: {
+      id: "restricted", schoolId: "restricted", createdAt: "restricted", updatedAt: "restricted", createdBy: "restricted",
+      studentId: "restricted", gender: "restricted", ethnicity: "restricted", homeAddress: "restricted",
+      mealFormStatus: "restricted", source: "restricted",
     },
   },
 });
