@@ -101,3 +101,18 @@ export async function currentHomerooms(db: Db, studentIds: readonly string[]): P
     );
   return new Map(rows.map((r) => [r.studentId, r.name]));
 }
+
+/** Every group membership a student has had, with dates. Current ones first. */
+export async function membershipsForStudent(db: Db, studentId: string) {
+  const current = sql<boolean>`(${groupMemberships.endsOn} is null or ${groupMemberships.endsOn} >= (now() at time zone "schools"."timezone")::date)`;
+  return db
+    .select({
+      id: groupMemberships.id, groupId: groups.id, name: groups.name, type: groups.type, gradeLevel: groups.gradeLevel,
+      startsOn: groupMemberships.startsOn, endsOn: groupMemberships.endsOn, current,
+    })
+    .from(groupMemberships)
+    .innerJoin(groups, eq(groups.id, groupMemberships.groupId))
+    .innerJoin(schools, eq(schools.id, groupMemberships.schoolId))
+    .where(eq(groupMemberships.studentId, studentId))
+    .orderBy(sql`${current} desc`, groups.type, sql`${groupMemberships.startsOn} desc`);
+}

@@ -21,7 +21,7 @@ test.describe("staff shell", () => {
     await expect(cami).toContainText("grade 7 · Syracuse");
     await cami.click();
     await page.waitForURL(/\/students\/[0-9a-f-]{36}$/);
-    await expect(page.getByRole("heading", { name: "Students" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Cami Martinez" })).toBeVisible();
   });
 
   test("g then a letter goes to each place", async ({ page }) => {

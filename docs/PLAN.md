@@ -272,7 +272,7 @@ Each phase ends with a short demo to leadership and a written check against exit
 - [ ] Students, enrollments, contacts, supports schema
 - [ ] Importers: Big Data Tracker, Schoolrunner students/contacts/attendance/behavior history
 - [ ] Student database grid (Glide): sort, filter (query spec), column picker, saved views, inline edit with audit, bulk edit
-- [ ] Student profile: header, groups, contacts, supports (restricted), timeline of attendance/behavior/comm
+- [ ] Student profile: header, groups, contacts, supports (restricted), timeline of attendance/behavior/comm — header, groups (with history), contacts, enrollment history, and restricted identifiers done; supports wait on the Phase 1 schema; the timeline fills in as attendance, behavior, and communication ship
 - [ ] Custom fields on students (admin UI)
 - [ ] Name pronunciation: phonetic spelling and staff-recorded audio on the profile; `<StudentName>` component with play button used in rosters, profile header, and `⌘K` results
 - Exit: leaders use search + profiles daily for two weeks; import diff against Schoolrunner shows zero unexplained mismatches.
