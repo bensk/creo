@@ -38,12 +38,12 @@ Effective-dated memberships throughout (`starts_on`, `ends_on` = last day includ
 - `sessions` (user_id, surface: staff / student / family, method: google / email_code / dev, token_hash, expires_at, last_seen_at, revoked_at) — replaces `family_sessions`
 
 **People**
-- `students` (user_id, legal + preferred name, pronouns, DOB, osis [unique, restricted], google_email [unique], photo_url, `custom jsonb`)
-- `name_pronunciations` (student_id, phonetic text, audio_url in Cloud Storage, recorded_by: student / family / staff, language, updated_at) — current version shown, history kept
+- `students` (user_id, legal + preferred name, pronouns, DOB, osis [unique, restricted], google_email [unique], photo_object_key, version [optimistic concurrency], `custom jsonb`)
+- `name_pronunciations` (student_id, phonetic, audio_object_key, language, recorded_by_kind: staff / student / family; created_by = who) — newest is current, history kept
 - `staff` (user_id, google_user_id, email, given/family/preferred name, title, status, org_unit_path, directory_synced_at, `custom jsonb`) — synced from Workspace Directory; roles in `staff_roles`
 - `contacts` (user_id, name, phone(s), email [never a creoprep.org address], language, preferred channel)
 - `student_contacts` (relationship, is_guardian, lives_with, pickup_allowed, contact_priority, portal_access, starts_on, ends_on)
-- `student_supports` (type: IEP/504/ELL/other, details, dates) — restricted table
+- `student_supports` (type: iep / 504 / ell / other, details, accommodations[], starts_on, ends_on, source) — every column sensitive; no overlapping periods per type
 
 **Enrollment and cohorts**
 - `enrollments` (student_id, school_year_id, grade_level, status, entry/exit dates and codes) — periods may not overlap per student
@@ -53,13 +53,13 @@ Effective-dated memberships throughout (`starts_on`, `ends_on` = last day includ
 - `courses`, `sections`, `section_staff`, `section_enrollments`
 
 **Attendance**
-- `attendance_codes` (code, label, counts_as: present/absent/tardy/excused, SIRS mapping)
-- `attendance_daily` (student_id, date, code_id, note, recorded_by)
+- `attendance_codes` (code, label, counts_as: present/absent/tardy/excused, sirs_code, position, archived_at)
+- `attendance_daily` (student_id, date [unique per student], code_id, note, source: sis / import; created_by = who recorded it) — basic tables shipped in Phase 1 for imported history
 - Period attendance: not planned; possible future module
 
 **Behavior and restorative practices**
-- `behavior_types` (label, valence: positive/negative, points, skill tag, requires_followup)
-- `behavior_events` (student_id, type_id, occurred_at, location, section_id, narrative, staff_id)
+- `behavior_types` (label, valence: positive/negative, points, skill, requires_followup, position, archived_at)
+- `behavior_events` (student_id, type_id, occurred_at, location, staff_id, points [snapshot], narrative [confidential], source: sis / import) — basic tables shipped in Phase 1 for imported history; section_id arrives with sections
 - `restorative_actions` (event_id or student_id, type: conversation / repair / family meeting / In-School Solutions / reset, status: requested → scheduled → completed, assigned_to, due_on, outcome)
 - `consequences` (event_id, type, dates)
 
@@ -75,14 +75,14 @@ Effective-dated memberships throughout (`starts_on`, `ends_on` = last day includ
 - `assessments` (IA metadata: subject, grade, window), `assessment_items` (number, topic, subtopic, standard, answer key, choices), `item_responses` (student_id, item_id, response, correct)
 
 **Flexibility layer**
-- `custom_field_definitions` (entity, key, label, type, options, sensitivity, created_by)
+- `custom_field_definitions` (entity: students / contacts, key, label, type, options, required, sensitivity, help_text, position, archived_at)
 - `trackers` (name, description, owner, school_year_id, population_kind: live/snapshot, population_source: all/grade/group/list/spec, population_spec jsonb, sensitivity, archived)
 - `tracker_shares` (tracker_id, user_id or google_group, access: view/edit)
 - `tracker_templates` (name, fields, default population) — "save as template" so next year's trip tracker is two clicks
 - `tracker_fields` (tracker_id, key, label, type, options, computed_spec jsonb nullable, order)
 - `tracker_rows` (tracker_id, student_id nullable, data jsonb)
 - `lists` (name, kind: static/dynamic, spec jsonb for dynamic, members for static)
-- `saved_views` (entity or source, columns, filters spec, sort, owner, sharing)
+- `saved_views` (owner_user_id, name, source, spec jsonb [filters + sort], columns[], sharing: private / school, position)
 - `rules` (name, spec jsonb, applies_to: list/tracker) — eligibility logic
 
 **Family portal and reports**
@@ -100,6 +100,10 @@ Effective-dated memberships throughout (`starts_on`, `ends_on` = last day includ
 - `question_threads` (student_id, staff_id, section_id nullable, subject, status: open/answered/closed, safety_flag, created_at)
 - `question_messages` (thread_id, author: student or staff_id, body, created_at, read_at)
 - `slip_reflections` (report_delivery_id or run_id, student_id, responses jsonb, language, submitted_at)
+
+**Imports**
+- `import_runs` (source, kind, started_at, finished_at, status, counts, error_summary [no student details])
+- `external_ids` (entity, entity_id, source, external_id) — unique per source and entity; makes imports safe to re-run
 
 **Slack**
 - `slack_installation` (team_id, bot token ref in Secret Manager, installed_by, scopes)
@@ -173,7 +177,7 @@ The same pattern covers intervention groups, mastery trackers, retention reviews
 |---|---|---|---|
 | Google OAuth | Sign-in, `hd=creoprep.org` restriction | in | 0 |
 | Workspace Directory | Staff roster, Google Groups → roles | in, nightly | 0 |
-| Big Data Tracker (Sheet `1YJoNWDmVxVKKFvI5xGir9NlGFLXNeSxvMQmG0rXrnVg`) | Source of truth for OSIS, grade, homeroom during transition | in, nightly | 1 |
+| Big Data Tracker (Notion database) | Source of truth for OSIS, grade, homeroom during transition | in, nightly | 1 |
 | Schoolrunner API (`creoprep.schoolrunner.org/api/v1/`) | Historical + live attendance, behavior, comm, grades during transition | in, nightly | 1 |
 | Google Calendar | Instructional days, school events | in | 3 |
 | Gmail | Attach family emails to comm logs (opt-in per staff) | in | 4 |
@@ -269,12 +273,12 @@ Each phase ends with a short demo to leadership and a written check against exit
 
 ### Phase 1 — Students, contacts, the grid
 - [ ] Slack app: install, signing-secret verification, user linking by email, `/student` lookup, link unfurls, `slack_rules` admin screen
-- [ ] Students, enrollments, contacts, supports schema
+- [x] Students, enrollments, contacts, supports schema (plus pronunciations, custom field definitions, saved views, import runs, external IDs, Slack tables, and basic attendance and behavior tables)
 - [ ] Importers: Big Data Tracker, Schoolrunner students/contacts/attendance/behavior history
 - [ ] Student database grid (Glide): sort, filter (query spec), column picker, saved views, inline edit with audit, bulk edit
 - [ ] Student profile: header, groups, contacts, supports (restricted), timeline of attendance/behavior/comm — header, groups (with history), contacts, enrollment history, and restricted identifiers done; supports wait on the Phase 1 schema; the timeline fills in as attendance, behavior, and communication ship
 - [ ] Custom fields on students (admin UI)
-- [ ] Name pronunciation: phonetic spelling and staff-recorded audio on the profile; `<StudentName>` component with play button used in rosters, profile header, and `⌘K` results
+- [ ] Name pronunciation: phonetic spelling and staff-recorded audio on the profile; `<StudentName>` component with play button used in rosters, profile header, and `⌘K` results — phonetic spelling shown through `<StudentName>` in the profile header and ⌘K; recording audio comes with file storage
 - Exit: leaders use search + profiles daily for two weeks; import diff against Schoolrunner shows zero unexplained mismatches.
 
 ### Phase 2 — Cohorts, lists, trackers
@@ -385,6 +389,7 @@ Not planned; add only if needed.
 23. The role and sensitivity matrix lives in one file, `src/core/permissions/matrix.ts`, mirroring the "Student Data Access Matrix" sign-off page (draft 1). Permissions are role → permission → scope (`all` or `homeroom`); sensitivity is role → levels for all students, plus levels for assigned students (teachers: `sensitive`). Fields with no declared sensitivity are hidden. Entries marked PROPOSED await sign-off by the Head of School and AP.
 24. AI is available to a user only when `AI_ENABLED` is not `false`, an `ANTHROPIC_API_KEY` is set, and a grant applies. Personal grant/revoke rows override role rows for the features they cover; at the same level revoke beats grant. `ai:revoke --user` ends the person's grants and records a personal revoke; `ai:revoke --role` ends the role's grants.
 25. Google sign-in uses `google-auth-library`, not Auth.js, so there is one session system (ADR 0002). Student sign-in checks the `/students` OU live in the Directory. Nightly jobs run as Cloud Run jobs started by Cloud Scheduler. Reset and seed are guarded by database name: only `creo_dev`, `*_test`, and confirmed `*_staging`.
+26. Phase 1 schema approved (October 9, 2026), including basic attendance and behavior tables pulled forward to hold Schoolrunner history (read-only until Phases 3 and 4). Student photos are uploaded one at a time by ops. The Big Data Tracker lives in Notion. The Schoolrunner importer waits for an API key.
 
 ## Open decisions
 

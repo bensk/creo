@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { signOutAction } from "../auth/actions";
 import type { Destination } from "./destinations";
+import { StudentName, type StudentNameParts } from "./StudentName";
 import { KeyCaps } from "./keyboard/KeyCaps";
 import { useKeyboard, useShortcut } from "./keyboard/KeyboardProvider";
 import { setThemeAction } from "./theme-actions";
@@ -12,7 +13,10 @@ import type { Theme } from "./theme";
 
 export interface StudentResult {
   id: string;
+  /** For matching and labels only; render with <StudentName> from nameParts. */
   name: string;
+  nameParts: StudentNameParts;
+  phonetic: string | null;
   grade: number | null;
   homeroom: string | null;
   enrolled: boolean;
@@ -112,7 +116,7 @@ export function CommandPalette({
                 keywords={[query]}
                 onSelect={() => go(`/students/${s.id}`)}
               >
-                <span className="font-medium text-ink-title">{s.name}</span>
+                <StudentName student={s.nameParts} phonetic={s.phonetic} className="font-medium text-ink-title" />
                 <span className="voice ml-auto text-xs text-ink-muted">
                   {s.enrolled
                     ? [s.grade ? `grade ${s.grade}` : null, s.homeroom].filter(Boolean).join(" · ")

@@ -15,6 +15,11 @@ export const searchStudentsAction = staffAction(
     return found.map((s) => ({
       id: s.id,
       name: displayName(s),
+      nameParts: {
+        legalFirstName: s.legalFirstName, legalLastName: s.legalLastName,
+        preferredFirstName: s.preferredFirstName, preferredLastName: s.preferredLastName,
+      },
+      phonetic: s.phonetic,
       grade: s.grade,
       homeroom: homerooms.get(s.id) ?? null,
       enrolled: s.enrolled,

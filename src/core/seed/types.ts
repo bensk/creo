@@ -40,4 +40,22 @@ export interface StudentPlacement {
   withdrawnOn?: string;
   /** Personas and the staff-parent's child keep a fixed homeroom. */
   fixed: boolean;
+  firstName: string;
+  familyLanguage: "en" | "es";
+}
+
+/** Seeded history runs through this date, so the seed never depends on today's date. */
+export const SEED_HISTORY_THROUGH = "2026-10-09";
+/** No school these weekdays (NYC calendar). */
+export const SEED_NO_SCHOOL = new Set(["2026-09-21"]);
+
+/** Instructional days from start through end, inclusive. */
+export function schoolDays(start: string, end: string): string[] {
+  const days: string[] = [];
+  for (let d = new Date(`${start}T00:00:00Z`); d <= new Date(`${end}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1)) {
+    const iso = d.toISOString().slice(0, 10);
+    const weekday = d.getUTCDay();
+    if (weekday !== 0 && weekday !== 6 && !SEED_NO_SCHOOL.has(iso)) days.push(iso);
+  }
+  return days;
 }

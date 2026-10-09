@@ -4,19 +4,21 @@ import {
   check,
   date,
   index,
+  integer,
   jsonb,
   pgTable,
   smallint,
   text,
+  timestamp,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { users } from "../../core/auth/schema";
 import { base } from "../../core/db/base";
-import { citext } from "../../core/db/columns";
+import { citext, sqlList } from "../../core/db/columns";
+import { SENSITIVITY_LEVELS } from "../../core/permissions/sensitivity";
 import { schoolYears } from "../../core/school/schema";
 
-// Phase 0 carries core columns only; photo, pronunciation, and supports land in Phase 1.
 export const students = pgTable(
   "students",
   {
@@ -35,6 +37,10 @@ export const students = pgTable(
     // Student Workspace account; sign-in matches it exactly.
     googleEmail: citext("google_email"),
     custom: jsonb("custom").notNull().default({}),
+    // Cloud Storage object path; the image itself never lives in the database.
+    photoObjectKey: text("photo_object_key"),
+    // Optimistic concurrency for grid edits: an update must name the version it read.
+    version: integer("version").notNull().default(1),
   },
   (t) => [
     uniqueIndex("students_school_osis_idx").on(t.schoolId, t.osis),
@@ -133,5 +139,89 @@ export const enrollments = pgTable(
     check("enrollments_grade_check", sql.raw(`grade_level between 5 and 8`)),
     check("enrollments_status_check", sql.raw(`status in ('active', 'withdrawn', 'completed')`)),
     check("enrollments_dates_check", sql.raw(`exit_date is null or exit_date >= entry_date`)),
+  ],
+);
+
+export const PRONUNCIATION_RECORDERS = ["staff", "student", "family"] as const;
+
+// How a student's name is said. The newest row is current; older rows are kept.
+// created_by is who recorded it; recorded_by_kind says whether that was staff,
+// the student, or their family.
+export const namePronunciations = pgTable(
+  "name_pronunciations",
+  {
+    ...base(),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id),
+    phonetic: text("phonetic"),
+    audioObjectKey: text("audio_object_key"),
+    language: text("language").notNull().default("en"),
+    recordedByKind: text("recorded_by_kind").notNull(),
+  },
+  (t) => [
+    index("name_pronunciations_student_idx").on(t.studentId, t.createdAt),
+    index("name_pronunciations_school_idx").on(t.schoolId),
+    index("name_pronunciations_created_by_idx").on(t.createdBy),
+    check("name_pronunciations_kind_check", sql.raw(`recorded_by_kind in (${sqlList(PRONUNCIATION_RECORDERS)})`)),
+    check("name_pronunciations_content_check", sql.raw(`phonetic is not null or audio_object_key is not null`)),
+  ],
+);
+
+export const SUPPORT_TYPES = ["iep", "504", "ell", "other"] as const;
+
+// IEP, 504, ELL, and other supports. The whole table is sensitive. Periods of
+// the same type can't overlap for one student (see the constraints migration).
+export const studentSupports = pgTable(
+  "student_supports",
+  {
+    ...base(),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id),
+    type: text("type").notNull(),
+    details: text("details"),
+    accommodations: text("accommodations").array().notNull().default(sql`'{}'::text[]`),
+    startsOn: date("starts_on").notNull(),
+    endsOn: date("ends_on"),
+    source: text("source").notNull().default("manual"),
+  },
+  (t) => [
+    index("student_supports_student_idx").on(t.studentId),
+    index("student_supports_school_type_idx").on(t.schoolId, t.type),
+    index("student_supports_created_by_idx").on(t.createdBy),
+    check("student_supports_type_check", sql.raw(`type in (${sqlList(SUPPORT_TYPES)})`)),
+    check("student_supports_source_check", sql.raw(`source in ('manual', 'import')`)),
+    check("student_supports_dates_check", sql.raw(`ends_on is null or ends_on >= starts_on`)),
+  ],
+);
+
+export const CUSTOM_FIELD_ENTITIES = ["students", "contacts"] as const;
+export const CUSTOM_FIELD_TYPES = ["text", "long_text", "number", "date", "boolean", "select", "multi_select"] as const;
+
+// Fields staff add without a migration. Values live in the entity's custom jsonb,
+// keyed by `key`, and are validated by a Zod schema built from these rows.
+export const customFieldDefinitions = pgTable(
+  "custom_field_definitions",
+  {
+    ...base(),
+    entity: text("entity").notNull(),
+    key: text("key").notNull(),
+    label: text("label").notNull(),
+    type: text("type").notNull(),
+    options: jsonb("options").notNull().default([]),
+    required: boolean("required").notNull().default(false),
+    sensitivity: text("sensitivity").notNull().default("standard"),
+    helpText: text("help_text"),
+    position: integer("position").notNull().default(0),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("custom_field_definitions_key_idx").on(t.schoolId, t.entity, t.key),
+    index("custom_field_definitions_created_by_idx").on(t.createdBy),
+    check("custom_field_definitions_entity_check", sql.raw(`entity in (${sqlList(CUSTOM_FIELD_ENTITIES)})`)),
+    check("custom_field_definitions_type_check", sql.raw(`type in (${sqlList(CUSTOM_FIELD_TYPES)})`)),
+    check("custom_field_definitions_key_check", sql.raw(`key ~ '^[a-z][a-z0-9_]{0,62}$'`)),
+    check("custom_field_definitions_sensitivity_check", sql.raw(`sensitivity in (${sqlList(SENSITIVITY_LEVELS)})`)),
   ],
 );

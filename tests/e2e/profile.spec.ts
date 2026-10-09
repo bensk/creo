@@ -40,3 +40,30 @@ test("an unknown or malformed student id is a 404", async ({ page }) => {
   expect((await page.goto("/students/not-a-uuid"))?.status()).toBe(404);
   expect((await page.goto("/students/00000000-0000-4000-8000-000000000000"))?.status()).toBe(404);
 });
+
+test("pronunciation shows in search results and the profile header", async ({ page }) => {
+  await signInAs(page, /^Teacher \(7th grade, Syracuse homeroom\)/);
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.keyboard.type("cami mart");
+  await expect(page.getByRole("option", { name: /Cami Martinez/ })).toContainText("kah-MEE-lah");
+  await page.getByRole("option", { name: /Cami Martinez/ }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("kah-MEE-lah");
+});
+
+test("supports show only to staff who may see them for that student", async ({ page }) => {
+  const openMateo = async () => {
+    await page.keyboard.press("ControlOrMeta+k");
+    await page.keyboard.type("mateo martinez");
+    await page.getByRole("option", { name: /Mateo Martinez/ }).click();
+    await page.waitForURL(/\/students\/[0-9a-f-]{36}$/);
+  };
+  // Mateo (5th grade) isn't in the Syracuse teacher's groups.
+  await signInAs(page, /^Teacher \(7th grade, Syracuse homeroom\)/);
+  await openMateo();
+  await expect(page.getByRole("heading", { name: "Supports" })).toHaveCount(0);
+
+  await signInAs(page, /^Support \(counselor\)/);
+  await openMateo();
+  await expect(page.getByRole("heading", { name: "Supports" })).toBeVisible();
+  await expect(page.getByText("English learner")).toBeVisible();
+});
