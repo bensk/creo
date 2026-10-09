@@ -1,3 +1,5 @@
+import { buildAttendanceSeed } from "../../modules/attendance/seed";
+import { buildBehaviorSeed } from "../../modules/behavior/seed";
 import { buildCohortsSeed } from "../../modules/cohorts/seed";
 import { buildStudentsSeed } from "../../modules/students/seed";
 import { buildCoreSeed } from "./core";
@@ -18,5 +20,7 @@ export function buildSeed(seed = SEED): SeedBatch[] {
     ...core.batches,
     ...studentsSeed.batches,
     ...buildCohortsSeed(core.context, studentsSeed.placements),
+    ...buildAttendanceSeed(core.context, studentsSeed.placements),
+    ...buildBehaviorSeed(core.context, studentsSeed.placements),
   ];
 }

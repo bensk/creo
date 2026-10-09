@@ -2,16 +2,17 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 import { requireViewer } from "@/core/auth/server";
 import { getDb } from "@/core/db/client";
-import { can } from "@/core/permissions";
+import { can, visibleLevels } from "@/core/permissions";
 import { readForViewer } from "@/core/permissions/read";
 import { StudentName } from "@/core/ui/StudentName";
 import { membershipsForStudent } from "@/modules/cohorts/queries";
-import { contactsForStudent, enrollmentHistory, getStudent } from "@/modules/students/queries";
+import { contactsForStudent, currentPronunciation, enrollmentHistory, getStudent, supportsForStudent } from "@/modules/students/queries";
 
 export const metadata = { title: "Student" };
 
 const date = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 const fmt = (d: string | null) => (d ? date.format(new Date(`${d}T00:00:00Z`)) : null);
+const SUPPORT_LABEL: Record<string, string> = { iep: "IEP", "504": "504 plan", ell: "English learner", other: "Other support" };
 const GROUP_KIND: Record<string, string> = {
   homeroom: "homeroom", grade_team: "grade team", advisory: "advisory", intervention: "intervention",
   club: "club", team: "team", custom: "group",
@@ -28,11 +29,17 @@ export default async function StudentProfile({ params }: { params: Promise<{ id:
   if (!row) notFound();
   // Drops fields above the viewer's sensitivity and logs any restricted fields shown.
   const student = await readForViewer(db, viewer, "students", row.id, row);
-  const [memberships, enrollments, contacts] = await Promise.all([
+  const [memberships, enrollments, contacts, pronunciation, levels] = await Promise.all([
     membershipsForStudent(db, row.id),
     enrollmentHistory(db, row.id),
     contactsForStudent(db, row.id),
+    currentPronunciation(db, row.id),
+    visibleLevels(db, viewer, row.id),
   ]);
+  // Supports are sensitive: only loaded (and logged) for viewers who may see them for this student.
+  const supports = levels.has("sensitive")
+    ? await Promise.all((await supportsForStudent(db, row.id)).map((s) => readForViewer(db, viewer, "student_supports", row.id, s, { entityId: s.id })))
+    : null;
 
   const current = enrollments.find((e) => e.status === "active" && !e.exitDate);
   const homeroom = memberships.find((m) => m.current && m.type === "homeroom");
@@ -44,7 +51,7 @@ export default async function StudentProfile({ params }: { params: Promise<{ id:
     <article className="grid max-w-5xl gap-10">
       <header className="grid gap-2 border-b border-line-soft pb-6">
         <h1 className="text-4xl font-bold tracking-tight">
-          <StudentName student={row} />
+          <StudentName student={row} phonetic={pronunciation?.phonetic} />
         </h1>
         <p className="voice text-sm text-ink-muted">
           {[
@@ -65,6 +72,40 @@ export default async function StudentProfile({ params }: { params: Promise<{ id:
 
       <div className="grid gap-10 md:grid-cols-[1fr_20rem]">
         <div className="grid content-start gap-10">
+          {supports && (
+            <section aria-labelledby="supports-h" className="grid gap-3">
+              <div className="flex items-baseline justify-between gap-2">
+                <h2 id="supports-h" className="text-lg font-semibold">Supports</h2>
+                <span className="voice text-xs text-ink-muted">sensitive. viewing these is logged.</span>
+              </div>
+              {supports.length === 0 ? (
+                <p className="voice text-sm text-ink-muted">no supports on file.</p>
+              ) : (
+                <ul className="grid gap-3">
+                  {supports.map((s) => (
+                    <li key={s.id} className="grid gap-1 rounded-lg border border-line-soft p-4">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="font-semibold text-ink-title">{SUPPORT_LABEL[s.type ?? ""] ?? s.type}</span>
+                        <span className="data text-xs text-ink-muted">
+                          {fmt(s.startsOn ?? null)}
+                          {s.endsOn ? ` – ${fmt(s.endsOn)}` : " – now"}
+                        </span>
+                      </div>
+                      {s.details && <p className="text-sm">{s.details}</p>}
+                      {s.accommodations && s.accommodations.length > 0 && (
+                        <ul className="grid list-disc gap-0.5 pl-5 text-sm">
+                          {s.accommodations.map((a) => (
+                            <li key={a}>{a}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+
           <section aria-labelledby="contacts-h" className="grid gap-3">
             <h2 id="contacts-h" className="text-lg font-semibold">Family contacts</h2>
             {currentContacts.length === 0 ? (

@@ -7,7 +7,7 @@ import {
 } from "../../core/seed/personas";
 import type { Rng } from "../../core/seed/random";
 import { GRADES, type Grade, type SeedBatch, type SeedContext, type StudentPlacement } from "../../core/seed/types";
-import { contacts, enrollments, studentContacts, students } from "./schema";
+import { contacts, enrollments, namePronunciations, studentContacts, studentSupports, students } from "./schema";
 
 export const STUDENTS_PER_HOMEROOM = 25;
 const WITHDRAWN_COUNT = 3;
@@ -166,7 +166,10 @@ export function buildStudentsSeed(ctx: SeedContext): { batches: SeedBatch[]; pla
         preferredFirstName: c.preferredFirstName ?? null, pronouns: c.pronouns,
         dateOfBirth: birthDate(rng, c.grade), osis: `${OSIS_PREFIX}${osis++}`, googleEmail,
       });
-      placements.push({ studentId, grade: c.grade, homeroom: c.homeroom, fixed: c.fixed });
+      placements.push({
+        studentId, grade: c.grade, homeroom: c.homeroom, fixed: c.fixed, firstName: c.firstName,
+        familyLanguage: family.contacts[0]?.language ?? "en",
+      });
       return studentId;
     });
 
@@ -210,6 +213,8 @@ export function buildStudentsSeed(ctx: SeedContext): { batches: SeedBatch[]; pla
     });
   }
 
+  const { supports, pronunciations } = buildSupportsAndNames(ctx, placements);
+
   return {
     batches: [
       { table: users, rows: [...studentUsers, ...familyUsers] },
@@ -217,7 +222,62 @@ export function buildStudentsSeed(ctx: SeedContext): { batches: SeedBatch[]; pla
       { table: contacts, rows: contactRows },
       { table: studentContacts, rows: linkRows },
       { table: enrollments, rows: enrollmentRows },
+      { table: studentSupports, rows: supports },
+      { table: namePronunciations, rows: pronunciations },
     ],
     placements,
   };
+}
+
+// Synthetic phonetic spellings for some first names in the pools.
+const PHONETIC: Readonly<Record<string, string>> = {
+  Camila: "kah-MEE-lah", Mateo: "mah-TAY-oh", Ayesha: "eye-EE-shah", Xavier: "ZAY-vee-er", Nevaeh: "neh-VAY-uh",
+  Imani: "ee-MAH-nee", Yamilet: "yah-mee-LET", Esperanza: "es-peh-RAHN-sah", Mamadou: "MAH-mah-doo",
+  Khadija: "kah-DEE-jah", Zainab: "ZAY-nab", Amara: "ah-MAR-ah", Moussa: "MOO-sah", Kofi: "KOH-fee",
+  Sanaa: "sah-NAH", Ailani: "eye-LAH-nee", Emely: "EM-eh-lee", Josiah: "joh-SY-ah", Genesis: "JEN-eh-sis",
+  Yusuf: "YOO-soof", Zuri: "ZOO-ree", Fatima: "FAH-tee-mah", Ibrahim: "ib-rah-HEEM", Jesus: "heh-SOOS",
+};
+
+const IEP_ACCOMMODATIONS = [
+  "Extended time (1.5x) on tests", "Separate location for tests", "Breaks as needed", "Directions read aloud",
+  "Preferential seating", "Graphic organizers", "Check for understanding after directions",
+];
+const ELL_ACCOMMODATIONS = ["Bilingual glossary", "Extended time (1.5x) on tests", "Directions read aloud in home language"];
+
+/**
+ * IEP, 504, and ELL supports at roughly typical rates, plus staff-recorded
+ * pronunciations for names in the phonetic list. Fixed for testing: one
+ * Syracuse student (not Cami) has an IEP, so the Syracuse teacher sees a
+ * support; Cami's brother Mateo (5th grade) is an English learner, so the
+ * Syracuse teacher does not.
+ */
+function buildSupportsAndNames(ctx: SeedContext, placements: readonly StudentPlacement[]) {
+  const { rng } = ctx;
+  const by = { schoolId: ctx.schoolId, createdBy: ctx.systemUserId };
+  const supports: Record<string, unknown>[] = [];
+  const pronunciations: Record<string, unknown>[] = [];
+  const syracuseIep = placements.find((p) => p.homeroom === "Syracuse" && !p.fixed);
+
+  for (const p of placements) {
+    const support = (type: string, accommodations: string[], details: string, startsOn: string) =>
+      supports.push({ id: rng.uuid(), ...by, studentId: p.studentId, type, details, accommodations, startsOn });
+
+    if (p === syracuseIep || (!p.fixed && rng.chance(0.18))) {
+      support("iep", rng.shuffle(IEP_ACCOMMODATIONS).slice(0, rng.int(2, 4)), "Specific learning disability", `${2026 - rng.int(1, 4)}-09-${String(rng.int(8, 25)).padStart(2, "0")}`);
+    } else if (!p.fixed && rng.chance(0.05)) {
+      support("504", ["Breaks as needed", "Preferential seating"], "Medical plan on file with the nurse", "2025-10-01");
+    }
+    const isMateo = p.fixed && p.firstName === "Mateo";
+    if (isMateo || (!p.fixed && rng.chance(p.familyLanguage === "es" ? 0.3 : 0.05))) {
+      support("ell", rng.shuffle(ELL_ACCOMMODATIONS).slice(0, 2), "Entering/Emerging", `${2026 - rng.int(0, 3)}-09-08`);
+    }
+
+    const phonetic = PHONETIC[p.firstName];
+    if (phonetic && (p.fixed || rng.chance(0.6))) {
+      pronunciations.push({
+        id: rng.uuid(), ...by, studentId: p.studentId, phonetic, language: p.familyLanguage, recordedByKind: "staff",
+      });
+    }
+  }
+  return { supports, pronunciations };
 }
