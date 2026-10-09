@@ -41,3 +41,17 @@ export function assertLocalDatabase(url: string, action: string, env: NodeJS.Pro
   }
   throw new Error(`Refusing to ${action}: "${name}" is not a development, test, or staging database`);
 }
+
+/**
+ * Throws unless this database may receive REAL student data: never a dev,
+ * test, or staging database, and never one marked synthetic by the seed. The
+ * opposite of assertLocalDatabase; importers call it before writing anything.
+ */
+export function assertRealDataDatabase(url: string, action: string, isSynthetic: boolean): void {
+  const name = databaseName(url);
+  if (!name) throw new Error(`Refusing to ${action}: can't read the database name`);
+  if (name === "creo_dev" || /_(dev|test|staging)$/.test(name)) {
+    throw new Error(`Refusing to ${action}: "${name}" holds synthetic data only; real student data never goes there`);
+  }
+  if (isSynthetic) throw new Error(`Refusing to ${action}: this database is marked synthetic`);
+}

@@ -125,7 +125,7 @@ locals {
 # ── Secrets. Values Terraform knows are written here; the rest are added by hand
 # (gcloud secrets versions add ...) and are only wired up once they exist.
 resource "google_secret_manager_secret" "secrets" {
-  for_each  = toset(["database-url-app", "database-url-migrate", "google-client-secret", "directory-credentials", "anthropic-api-key"])
+  for_each  = toset(["database-url-app", "database-url-migrate", "google-client-secret", "directory-credentials", "anthropic-api-key", "notion-token"])
   secret_id = "${local.name}-${each.value}"
   labels    = local.labels
   replication {

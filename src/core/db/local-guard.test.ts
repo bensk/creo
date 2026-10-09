@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertLocalDatabase, isLocalDatabaseUrl } from "./local-guard";
+import { assertLocalDatabase, assertRealDataDatabase, isLocalDatabaseUrl } from "./local-guard";
 
 const dev = { NODE_ENV: "development" } as NodeJS.ProcessEnv;
 
@@ -47,5 +47,17 @@ describe("assertLocalDatabase", () => {
 
   it("refuses everything when NODE_ENV is production", () => {
     expect(() => assertLocalDatabase("postgres://creo:creo@localhost:5432/creo_dev", "seed", { NODE_ENV: "production" } as NodeJS.ProcessEnv)).toThrow(/NODE_ENV is production/);
+  });
+});
+
+describe("assertRealDataDatabase", () => {
+  it("allows production", () => {
+    expect(() => assertRealDataDatabase("postgres://creo_app:pw@10.0.0.3:5432/creo", "import", false)).not.toThrow();
+  });
+  it.each(["creo_dev", "creo_test", "creo_staging"])("refuses %s", (name) => {
+    expect(() => assertRealDataDatabase(`postgres://u:p@localhost:5432/${name}`, "import", false)).toThrow(/synthetic data only/);
+  });
+  it("refuses any database marked synthetic", () => {
+    expect(() => assertRealDataDatabase("postgres://u:p@localhost:5432/creo", "import", true)).toThrow(/marked synthetic/);
   });
 });
