@@ -6,12 +6,21 @@ const serverEnvSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+    DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
     // Local development only. See core/auth/dev.
     DEV_SIGN_IN: z.enum(["true", "false"]).optional(),
     // AI is off unless grants exist; AI_ENABLED=false turns it off for everyone.
     AI_ENABLED: z.enum(["true", "false"]).default("true"),
     ANTHROPIC_API_KEY: z.string().min(1).optional(),
     ANTHROPIC_MODEL: z.string().min(1).optional(),
+    // Google sign-in. Without these, sign-in pages say Google sign-in isn't set up.
+    APP_URL: z.url().optional(),
+    GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+    GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+    WORKSPACE_DOMAIN: z.string().min(1).default("creoprep.org"),
+    // Directory (Admin SDK) via a service account with domain-wide delegation.
+    GOOGLE_DIRECTORY_CREDENTIALS: z.string().min(1).optional(),
+    GOOGLE_DIRECTORY_ADMIN: z.email().optional(),
   })
   .refine((env) => !(env.NODE_ENV === "production" && env.DEV_SIGN_IN !== undefined), {
     // Any value at all in production is a misconfiguration: refuse to start.

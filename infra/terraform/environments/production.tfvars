@@ -1,0 +1,9 @@
+# terraform apply -var-file=environments/production.tfvars
+project_id        = "creo-sis-production" # replace with the real project ID
+environment       = "production"
+app_url           = "https://sis.creoprep.org"
+db_tier           = "db-custom-2-7680"
+app_min_instances = 2
+app_max_instances = 10
+# google_client_id      = "...apps.googleusercontent.com"   # once the OAuth client exists
+# directory_admin_email = "admin@creoprep.org"              # once domain-wide delegation is authorized

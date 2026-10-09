@@ -19,7 +19,7 @@ The product goals, in priority order:
 - Next.js (App Router, React Server Components, Server Actions), TypeScript `strict` (pinned to 6.0.x until typescript-eslint supports 7)
 - Tailwind CSS with Creo design tokens (see Design system below)
 - PostgreSQL via Drizzle ORM; migrations with `drizzle-kit`
-- Auth.js with Google provider, restricted to the `creoprep.org` Workspace domain
+- Google sign-in with `google-auth-library` (OAuth code flow + PKCE + nonce, `hd` checked on the server), restricted to the `creoprep.org` Workspace domain; no Auth.js (see `docs/decisions/0002-google-sign-in-and-hosting.md`)
 - Google Cloud APIs: Admin SDK Directory (staff, groups), Sheets, Calendar, Gmail (communication logging)
 - Claude API (`@anthropic-ai/sdk`) for optional AI features; off by default, enabled from the backend by role or individual user; model set by `ANTHROPIC_MODEL` env var, never hardcoded. The app must build, run, and pass all tests with no `ANTHROPIC_API_KEY` set.
 - next-intl for internationalization; every family-facing string ships in English and Spanish
@@ -44,6 +44,8 @@ pnpm db:seed          # wipe the LOCAL dev database and load synthetic data (nev
 pnpm test             # vitest
 pnpm test:e2e         # playwright (uses the seeded dev database)
 pnpm test:prod-guards # after pnpm build: proves dev sign-in is absent from the production build
+pnpm directory:sync   # sync staff and roles from Google Workspace (nightly Cloud Run job)
+pnpm load:sessions    # mint sessions on a synthetic database for the k6 load test (tests/load)
 pnpm lint && pnpm typecheck
 ```
 

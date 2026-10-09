@@ -9,7 +9,8 @@
     "signInBody": "Sign in with your Creo Google account.",
     "notSetUp": "Google sign-in is not set up yet.",
     "greeting": "Hi, {name}",
-    "comingSoon": "Your portal is being built. Soon you'll see your attendance, your week, and your slips here."
+    "comingSoon": "Your portal is being built. Soon you'll see your attendance, your week, and your slips here.",
+    "signInButton": "Sign in with Google"
   },
   "family": {
     "signInTitle": "Creo family portal",
@@ -18,5 +19,15 @@
     "greeting": "Hello, {name}",
     "children": "You can see information for {count, plural, one {# student} other {# students}}.",
     "comingSoon": "Soon you'll see attendance, behavior, and weekly slips for your children here."
+  },
+  "signInErrors": {
+    "cancelled": "Sign-in was cancelled. Try again when you're ready.",
+    "expired": "That took too long. Please try again.",
+    "wrong_domain": "Use your Creo school Google account.",
+    "no_account": "We couldn't find your student account. Ask your homeroom teacher for help.",
+    "not_student_account": "This isn't a student account. Staff sign in at the main sign-in page.",
+    "directory_unavailable": "We couldn't check your account right now. Please try again in a minute.",
+    "no_access": "Your account isn't active right now. Ask the main office for help.",
+    "other": "Sign-in didn't work. Please try again."
   }
 }
