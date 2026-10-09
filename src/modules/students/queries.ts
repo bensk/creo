@@ -84,3 +84,43 @@ export async function searchStudents(db: Db, schoolId: string, query: string, li
     .orderBy(sql`${enrolled} desc`, students.legalLastName, students.legalFirstName)
     .limit(limit);
 }
+
+/** One student's full row (redact with readForViewer before showing it). */
+export async function getStudent(db: Db, schoolId: string, studentId: string) {
+  const [row] = await db
+    .select()
+    .from(students)
+    .where(and(eq(students.schoolId, schoolId), eq(students.id, studentId)));
+  return row ?? null;
+}
+
+/** Every enrollment period for a student, newest first. */
+export async function enrollmentHistory(db: Db, studentId: string) {
+  return db
+    .select({
+      id: enrollments.id, gradeLevel: enrollments.gradeLevel, status: enrollments.status,
+      entryDate: enrollments.entryDate, exitDate: enrollments.exitDate,
+    })
+    .from(enrollments)
+    .where(eq(enrollments.studentId, studentId))
+    .orderBy(sql`${enrollments.entryDate} desc`);
+}
+
+/** A student's contacts with how they're related, current links first, by priority. Standard fields only. */
+export async function contactsForStudent(db: Db, studentId: string) {
+  const current = sql<boolean>`(${studentContacts.endsOn} is null or ${studentContacts.endsOn} >= (now() at time zone "schools"."timezone")::date)`;
+  return db
+    .select({
+      id: contacts.id, firstName: contacts.firstName, lastName: contacts.lastName, email: contacts.email,
+      phonePrimary: contacts.phonePrimary, phoneSecondary: contacts.phoneSecondary, language: contacts.language,
+      preferredChannel: contacts.preferredChannel, relationship: studentContacts.relationship,
+      isGuardian: studentContacts.isGuardian, livesWith: studentContacts.livesWith,
+      pickupAllowed: studentContacts.pickupAllowed, portalAccess: studentContacts.portalAccess,
+      priority: studentContacts.contactPriority, current,
+    })
+    .from(studentContacts)
+    .innerJoin(contacts, eq(contacts.id, studentContacts.contactId))
+    .innerJoin(schools, eq(schools.id, studentContacts.schoolId))
+    .where(eq(studentContacts.studentId, studentId))
+    .orderBy(sql`${current} desc`, studentContacts.contactPriority);
+}
