@@ -46,6 +46,7 @@ pnpm test:e2e         # playwright (uses the seeded dev database)
 pnpm test:prod-guards # after pnpm build: proves dev sign-in is absent from the production build
 pnpm directory:sync   # sync staff and roles from Google Workspace (nightly Cloud Run job)
 pnpm load:sessions    # mint sessions on a synthetic database for the k6 load test (tests/load)
+pnpm import:bdt       # import the Big Data Tracker (Notion) into PRODUCTION only; refuses dev/test/staging/synthetic databases
 pnpm lint && pnpm typecheck
 ```
 

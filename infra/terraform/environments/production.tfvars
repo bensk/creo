@@ -7,3 +7,4 @@ app_min_instances = 2
 app_max_instances = 10
 # google_client_id      = "...apps.googleusercontent.com"   # once the OAuth client exists
 # directory_admin_email = "admin@creoprep.org"              # once domain-wide delegation is authorized
+# notion_bdt_data_source_id = "8fa793d2-4076-83cc-85a1-0787fd77e7c1"  # 26-27 Big Data Tracker, once the Notion token is stored

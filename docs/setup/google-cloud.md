@@ -47,7 +47,17 @@ The next merge to `main` deploys staging: it builds the images, runs migrations,
 3. Set `directory_admin_email` (a Workspace admin the service account acts as) in the tfvars file and `terraform apply`. This adds the nightly sync (2:30 a.m.) and enables student sign-in checks.
 4. Tell us which Google Groups map to which roles; they go in `role_group_mappings`.
 
-## 6. Staging data and the load test
+## 6. Big Data Tracker import (Notion admin + Cloud owner, production only)
+
+1. Notion → Settings → Connections → Develop or manage integrations → New integration: "Creo SIS importer", internal, capabilities **Read content only** (no insert, update, comments, or user information).
+2. Open the "26-27 Big Data Tracker" database → ••• → Connections → add "Creo SIS importer". Nothing else needs to be shared with it.
+3. Store the token: `printf '%s' '<token>' | gcloud secrets versions add creo-sis-notion-token --data-file=-`
+4. In `production.tfvars`, set `notion_bdt_data_source_id` (the commented line) and `terraform apply`. The import then runs nightly at 2:45 a.m.; results are in `import_runs`.
+5. Each new school year, connect the new tracker and update the data source ID.
+
+The importer refuses any dev, test, staging, or synthetic database, so real student data only ever lands in production.
+
+## 7. Staging data and the load test
 
 Staging only ever holds synthetic data. With the Cloud SQL Auth Proxy running locally:
 

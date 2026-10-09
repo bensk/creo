@@ -67,3 +67,9 @@ variable "app_image" {
   type        = string
   default     = "us-docker.pkg.dev/cloudrun/container/hello"
 }
+
+variable "notion_bdt_data_source_id" {
+  description = "Notion data source ID of the current Big Data Tracker. Empty disables the nightly import (production only)."
+  type        = string
+  default     = ""
+}

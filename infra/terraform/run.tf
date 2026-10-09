@@ -20,8 +20,10 @@ resource "google_service_account" "directory" {
 }
 
 locals {
-  app_secrets            = ["database-url-app", "google-client-secret", "anthropic-api-key"]
-  jobs_secrets           = ["database-url-app", "database-url-migrate", "directory-credentials"]
+  app_secrets  = ["database-url-app", "google-client-secret", "anthropic-api-key"]
+  jobs_secrets = ["database-url-app", "database-url-migrate", "directory-credentials", "notion-token"]
+  # Real student data is imported into production only; staging holds synthetic data.
+  bdt_import_enabled     = var.notion_bdt_data_source_id != "" && local.is_production
   google_sign_in_enabled = var.google_client_id != ""
   directory_enabled      = var.directory_admin_email != ""
 }
@@ -321,4 +323,85 @@ resource "google_service_account_iam_member" "deployer_acts_as" {
   service_account_id = each.value
   role               = "roles/iam.serviceAccountUser"
   member             = "serviceAccount:${google_service_account.deployer.email}"
+}
+
+# ── Nightly Big Data Tracker import (Notion → students, homerooms, contacts, IEP/504), production only.
+resource "google_cloud_run_v2_job" "bdt_import" {
+  count               = local.bdt_import_enabled ? 1 : 0
+  name                = "creo-sis-bdt-import"
+  location            = var.region
+  deletion_protection = true
+  labels              = local.labels
+
+  template {
+    task_count = 1
+    template {
+      service_account = google_service_account.jobs.email
+      max_retries     = 1
+      timeout         = "900s"
+      vpc_access {
+        egress = "PRIVATE_RANGES_ONLY"
+        network_interfaces {
+          network    = google_compute_network.vpc.id
+          subnetwork = google_compute_subnetwork.app.id
+        }
+      }
+      containers {
+        image = var.app_image
+        args  = ["import:bdt"]
+        env {
+          name  = "NOTION_BDT_DATA_SOURCE_ID"
+          value = var.notion_bdt_data_source_id
+        }
+        env {
+          name = "DATABASE_URL"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.secrets["database-url-app"].secret_id
+              version = "latest"
+            }
+          }
+        }
+        env {
+          name = "NOTION_TOKEN"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.secrets["notion-token"].secret_id
+              version = "latest"
+            }
+          }
+        }
+      }
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [template[0].template[0].containers[0].image, client, client_version]
+  }
+  depends_on = [google_secret_manager_secret_iam_member.jobs]
+}
+
+resource "google_cloud_run_v2_job_iam_member" "scheduler_runs_bdt_import" {
+  count    = local.bdt_import_enabled ? 1 : 0
+  name     = google_cloud_run_v2_job.bdt_import[0].name
+  location = var.region
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.scheduler.email}"
+}
+
+# Nightly at 2:45 a.m. New York time, after Directory sync.
+resource "google_cloud_scheduler_job" "bdt_import" {
+  count     = local.bdt_import_enabled ? 1 : 0
+  name      = "creo-sis-bdt-import-nightly"
+  region    = var.region
+  schedule  = "45 2 * * *"
+  time_zone = "America/New_York"
+
+  http_target {
+    http_method = "POST"
+    uri         = "https://run.googleapis.com/v2/projects/${var.project_id}/locations/${var.region}/jobs/${google_cloud_run_v2_job.bdt_import[0].name}:run"
+    oauth_token {
+      service_account_email = google_service_account.scheduler.email
+    }
+  }
 }
