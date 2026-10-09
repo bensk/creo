@@ -5,6 +5,7 @@ export function fakeDirectory(users: Partial<DirectoryUser>[] = [], groups: Reco
   const all: DirectoryUser[] = users.map((u, i) => ({
     id: u.id ?? `g-${i}`, email: (u.email ?? `user${i}@creoprep.org`).toLowerCase(), givenName: u.givenName ?? "Test",
     familyName: u.familyName ?? `User${i}`, orgUnitPath: u.orgUnitPath ?? "/Staff", suspended: u.suspended ?? false,
+    employeeId: u.employeeId ?? null,
   }));
   let calls = 0;
   const directory: Directory & { calls: () => number } = {

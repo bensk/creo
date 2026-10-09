@@ -30,7 +30,8 @@ function addDays(isoDate: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-async function syncUserId(db: Db, schoolId: string): Promise<string> {
+/** The "Google Directory sync" system user, created on first use. */
+export async function syncUserIdFor(db: Db, schoolId: string): Promise<string> {
   const [existing] = await db
     .select({ id: users.id })
     .from(users)
@@ -52,7 +53,7 @@ export async function syncStaffFromDirectory(
 ): Promise<SyncSummary> {
   const { schoolId, today } = options;
   const yesterday = addDays(today, -1);
-  const actor = await syncUserId(db, schoolId);
+  const actor = await syncUserIdFor(db, schoolId);
   const audit = (action: string, entity: string, entityId: string, before: unknown, after: unknown) =>
     recordAudit(db, { schoolId, actorUserId: actor, action, entity, entityId, before, after, via: "system" });
   const summary: SyncSummary = { created: 0, updated: 0, deactivated: 0, rolesAdded: 0, rolesEnded: 0 };

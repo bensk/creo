@@ -1,4 +1,5 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
+import { users } from "@/core/identity/schema";
 import { dayBefore, diff, type ImportContext } from "@/core/imports/context";
 import { contacts, enrollments, studentContacts, studentSupports, students } from "./schema";
 
@@ -164,4 +165,47 @@ export async function syncImportedSupport(
   await ctx.db.update(studentSupports).set(fields).where(eq(studentSupports.id, existing.id));
   await ctx.audit("student_support.update", "student_supports", existing.id, null, { source: "import" });
   return "updated";
+}
+
+/** Currently enrolled students in a grade, with what's needed to match a Google account. */
+export async function enrolledStudentsInGrade(ctx: ImportContext, grade: number) {
+  return ctx.db
+    .select({
+      id: students.id, legalFirstName: students.legalFirstName, legalLastName: students.legalLastName,
+      preferredFirstName: students.preferredFirstName, preferredLastName: students.preferredLastName,
+      googleEmail: students.googleEmail,
+    })
+    .from(students)
+    .innerJoin(enrollments, eq(enrollments.studentId, students.id))
+    .where(and(eq(students.schoolId, ctx.schoolId), eq(enrollments.gradeLevel, grade), eq(enrollments.status, "active"), isNull(enrollments.exitDate)));
+}
+
+export async function studentByGoogleEmail(ctx: ImportContext, email: string) {
+  const [row] = await ctx.db.select({ id: students.id }).from(students).where(and(eq(students.schoolId, ctx.schoolId), eq(students.googleEmail, email)));
+  return row?.id ?? null;
+}
+
+export async function studentGoogleEmail(ctx: ImportContext, studentId: string) {
+  const [row] = await ctx.db.select({ googleEmail: students.googleEmail }).from(students).where(eq(students.id, studentId));
+  return row?.googleEmail ?? null;
+}
+
+/**
+ * Links a student's Google account: sets google_email and creates or updates
+ * their sign-in identity (users row, kind student). Audited.
+ */
+export async function linkStudentAccount(ctx: ImportContext, studentId: string, email: string, displayName: string) {
+  const [current] = await ctx.db.select({ userId: students.userId, googleEmail: students.googleEmail }).from(students).where(eq(students.id, studentId));
+  let userId = current!.userId;
+  if (!userId) {
+    const [u] = await ctx.db
+      .insert(users)
+      .values({ schoolId: ctx.schoolId, createdBy: ctx.actorUserId, kind: "student", email, displayName })
+      .returning({ id: users.id });
+    userId = u!.id;
+  } else {
+    await ctx.db.update(users).set({ email }).where(eq(users.id, userId));
+  }
+  await ctx.db.update(students).set({ googleEmail: email, userId, version: sql`${students.version} + 1` }).where(eq(students.id, studentId));
+  await ctx.audit("student.link_google_account", "students", studentId, { googleEmail: current!.googleEmail }, { googleEmail: email });
 }
