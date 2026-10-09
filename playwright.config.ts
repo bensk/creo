@@ -1,6 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const port = 3100;
+// Next 16 allows one dev server per project folder, so locally the tests reuse a
+// running `pnpm dev` (port 3000) if there is one; CI starts its own.
+const port = 3000;
 
 export default defineConfig({
   testDir: "./tests/e2e",

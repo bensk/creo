@@ -8,6 +8,10 @@ const serverEnvSchema = z
     DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
     // Local development only. See core/auth/dev.
     DEV_SIGN_IN: z.enum(["true", "false"]).optional(),
+    // AI is off unless grants exist; AI_ENABLED=false turns it off for everyone.
+    AI_ENABLED: z.enum(["true", "false"]).default("true"),
+    ANTHROPIC_API_KEY: z.string().min(1).optional(),
+    ANTHROPIC_MODEL: z.string().min(1).optional(),
   })
   .refine((env) => !(env.NODE_ENV === "production" && env.DEV_SIGN_IN !== undefined), {
     // Any value at all in production is a misconfiguration: refuse to start.

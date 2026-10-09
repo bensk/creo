@@ -258,12 +258,12 @@ Each phase ends with a short demo to leadership and a written check against exit
 - [x] Synthetic seed generator (realistic names, grades 5–8, four homerooms per grade, contacts, a persona for every role; each module adds its own history, e.g. a year of attendance/behavior, when its schema lands)
 - [x] Dev-only "sign in as a seeded user" for every role; compiled out of production builds, with CI proof
 - [ ] Google sign-in with domain restriction; staff sync from Directory; roles from Google Groups
-- [ ] Permission layer + audit log
-- [ ] `ai_grants` table (role and user grants, per-feature scope), `pnpm ai:grant` / `ai:revoke` / `ai:list` CLI, `AI_ENABLED` kill switch
+- [x] Permission layer + audit log (rows marked PROPOSED in `src/core/permissions/matrix.ts` await sign-off of the access matrix)
+- [x] `ai_grants` table (role and user grants, per-feature scope), `pnpm ai:grant` / `ai:revoke` / `ai:list` CLI, `AI_ENABLED` kill switch
 - [ ] Google Cloud project, Terraform for Cloud Run (app + worker), Cloud SQL HA, Secret Manager, Storage; staging and production
 - [x] `school_id` on every school-data table (enforced by `src/core/db/schema-rules.test.ts`)
 - [ ] k6 load test: 500 concurrent users, homeroom-start burst
-- [ ] App shell: sidebar, command palette, keyboard layer, `?` help sheet, light/dark, Creo tokens
+- [x] App shell: sidebar, command palette, keyboard layer, `?` help sheet, light/dark, Creo tokens; English/Spanish (next-intl) in the student and family portals
 - [x] Module registry and `defineModule`
 - Exit: a staff member signs in, sees their role-appropriate shell, and every shortcut in CLAUDE.md works.
 
@@ -382,6 +382,8 @@ Not planned; add only if needed.
 20. Phase 0 schema approved (`docs/decisions/0001-phase-0-schema.md`). Sensitivity: contact details are `standard`; teachers see `sensitive` fields only for students they're assigned to (via `group_staff`) and never `confidential`; `support` sees all levels; `coach` sees `standard` only; `admin` sees the same data as `leader`.
 21. Write rules: any staff member may log behavior and family communication for any student; attendance is taken by the homeroom teacher plus ops, admin, and leader; grades by the section's teacher (Phase 7).
 22. A student's Google account links to their record by exact match on `students.google_email`, imported from the Big Data Tracker; the graduation-year OU is a cross-check, and a mismatch is flagged for ops, not blocked.
+23. The role and sensitivity matrix lives in one file, `src/core/permissions/matrix.ts`, mirroring the "Student Data Access Matrix" sign-off page (draft 1). Permissions are role → permission → scope (`all` or `homeroom`); sensitivity is role → levels for all students, plus levels for assigned students (teachers: `sensitive`). Fields with no declared sensitivity are hidden. Entries marked PROPOSED await sign-off by the Head of School and AP.
+24. AI is available to a user only when `AI_ENABLED` is not `false`, an `ANTHROPIC_API_KEY` is set, and a grant applies. Personal grant/revoke rows override role rows for the features they cover; at the same level revoke beats grant. `ai:revoke --user` ends the person's grants and records a personal revoke; `ai:revoke --role` ends the role's grants.
 
 ## Open decisions
 

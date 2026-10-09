@@ -122,7 +122,7 @@ Memberships (homeroom, grade, section, group, enrollment status) are effective-d
 
 ### Permissions and privacy
 
-- Every server action and query goes through `core/permissions`. Default deny.
+- Every server action and query goes through `core/permissions`. Default deny. Staff server actions are defined with `staffAction()` (`core/actions/staff-action.ts`): it requires a session, validates input with Zod, checks the permission, runs in one transaction, and rolls back any write that recorded no audit entry. Reads that can include restricted, sensitive, or confidential fields go through `readForViewer()` (`core/permissions/read.ts`), which redacts by sensitivity and logs `sensitive_reads`. The role and sensitivity matrix lives only in `core/permissions/matrix.ts`; modules declare permission keys and each student-data column's sensitivity in their manifest.
 - Staff roles: `admin`, `leader`, `ops`, `teacher`, `support` (SPED/ELL/counseling), `coach`. A person can hold several roles; their permissions are the union. Roles come from Google Groups through a group-to-role mapping stored as data (editable by admins); an admin can also assign a role manually, and Directory sync never overwrites a manual assignment.
 - All staff can see every student in the school. A teacher's assignments (homeroom, grade team, sections) decide what is shown first — "my classes," "my homeroom," their gradebooks, attendance, and behavior — not what is allowed. Sensitive fields are still gated by sensitivity level.
 - Every sign-in resolves to one `users` row (kind: staff / student / family) linked to `staff`, `students`, or `contacts`; that row is the actor for sessions, audit, AI grants, and shares. Imports and CLIs act as named system users, so `created_by` is never null.
@@ -139,7 +139,7 @@ Memberships (homeroom, grade, section, group, enrollment status) are effective-d
 
 - Every feature works fully without AI. AI is an accelerator layered on top of a manual path that already exists: the tracker builder, widget builder, and list builder are complete UIs on their own, and AI only pre-fills them.
 - AI is off by default and can only be turned on from the backend. Grants can target a role (e.g. `leader`, `ops`) or an individual user, and a user has AI if either applies; an individual revoke overrides a role grant. Grants live in the `ai_grants` table, written only by the CLI (`pnpm ai:grant --role leader`, `pnpm ai:grant --user <email>`, `pnpm ai:revoke ...`, `pnpm ai:list`) run by Ben against the production database. There is no admin UI and no self-serve request. Grants can optionally be scoped to specific AI features (e.g. `trackers.suggest`, `dashboards.widget`, `family.draft`). A global kill switch (`AI_ENABLED=false`) overrides all grants. When AI is unavailable for a user, AI entry points are not rendered at all — no disabled buttons, no upsell. The `student` and `family` roles cannot receive grants unless that rule is deliberately changed in code.
-- Build AI features in `src/modules/<module>/ai/` behind `core/ai/isEnabledFor(user)`. Never import `core/ai` from a non-AI code path.
+- Build AI features in `src/modules/<module>/ai/` behind `isEnabledFor(db, viewer, feature)` from `core/ai/grants.ts`; feature keys live in `core/ai/features.ts`. Never import `core/ai` from a non-AI code path (ESLint enforces this).
 - All Claude calls go through `core/ai/client.ts`. Creo's K-12 Claude agreement covers student data, so prompts may include any field — but only fields the requesting user is already permitted to see. The AI never widens access. The client logs prompt metadata (user, feature, entities referenced, token counts) without content.
 - AI output that changes data (a tracker schema, a dashboard widget, a list definition) must be returned as structured JSON via tool use, validated against the Zod schema, and shown to the user as a preview they confirm. AI never writes to the database directly.
 - AI-drafted family communication: plain language, no emoji, never sent automatically.
@@ -199,14 +199,16 @@ Slack is Creo's operating system, so the SIS meets staff there. Slack is a conve
 
 Apply the Creo College Prep design system (tokens, typography, voice): https://claude.ai/code/artifact/8fe2e309-f268-4777-a5b4-cb78925f5ffb
 
-- Fonts: Inter for text; Maple Mono for numbers, IDs, dates, scores, and anything tabular.
-- Brand: primary `#ffb12a` (orange), `#434350` (charcoal), `#007bff` (blue). Expanded palette: coral pink, emerald green, soft purple, teal, dark navy, light gray. Define these as Tailwind v4 theme tokens in the `@theme` block of `src/app/globals.css`; never hardcode hex values in components.
-- Support light and dark mode.
+- Tokens live in `src/app/globals.css`: the design system's colors as CSS variables for light and dark, exposed to Tailwind as `bg-surface`, `bg-surface-raised`, `bg-surface-sunken`, `text-ink`, `text-ink-title`, `text-ink-muted`, `text-link`, `border-line`, `border-line-soft`, `text-amber`, and the accent colors. Never hardcode hex values in components. `brand-amber` fails contrast on white: use it for marks, rules, and the selected-item stripe, never for text.
+- Fonts (self-hosted from npm, `src/app/fonts.ts`): Inter for text; Maple Mono for numbers, IDs, dates, scores, and anything tabular (`.data`). The app uses Maple Mono rather than the design system's Google Sans Code (Ben's call, October 2026).
+- **The system's voice is Maple Mono italic** (`.voice`), whose cursive italic sets what the system says apart from what people wrote: hints ("press ? for keys"), the "then" between keys in a sequence, metadata (dates, counts, roles, grade · homeroom), placeholders, empty states, and group labels in the palette and help sheet. Keep it lowercase and short. Never use it for student names, content staff or families wrote, or headings.
+- Light and dark mode: the viewer's system setting by default, or an explicit choice saved per device in the `creo_theme` cookie.
 - UI copy is plain and useful. No cute or clever microcopy, no metaphors, no editorial voice.
+- Staff app places live in `src/core/ui/destinations.ts`; a place whose module hasn't shipped shows a one-line "arrives in Phase N" page so every go-to shortcut works.
 
 ## Keyboard layer
 
-Implemented once in `core/ui/keyboard`. Every new screen must register its shortcuts there so they appear in the `?` help sheet.
+Implemented once in `core/ui/keyboard`. Every new screen registers its shortcuts with `useShortcut({ keys, description, group, run })` so they appear in the `?` help sheet (`group: "This screen"` for screen shortcuts). Sequences are written `"g s"`, and `"mod+k"` means ⌘K on a Mac and Ctrl K elsewhere. Single-key shortcuts never fire while typing in a field. A screen with its own search marks the input `data-screen-search` so `/` focuses it.
 
 | Keys | Action |
 |---|---|

@@ -1,10 +1,170 @@
 @import "tailwindcss";
 
-/* Placeholder brand tokens. The full Creo design system (expanded palette,
-   typography, dark mode) is applied in the app shell step. Never hardcode hex
-   values in components; use these tokens. */
-@theme {
-  --color-brand-orange: #ffb12a;
-  --color-brand-charcoal: #434350;
-  --color-brand-blue: #007bff;
+/*
+ * Creo College Prep design tokens (design system: Creo College Prep, tokens.json),
+ * for light and dark. Components use the Tailwind names below (bg-surface,
+ * text-ink, border-line, ...), never hex values. Theme: the viewer's system
+ * setting, or an explicit choice stored in the creo_theme cookie and set as
+ * data-theme on <html>.
+ */
+:root {
+  --surface-100: #ffffff;
+  --surface-200: #f6f6f8;
+  --surface-300: #ececf1;
+  --surface-brand: #007bff;
+  --ink: #424242;
+  --ink-title: #434350;
+  --ink-muted: #5e5e6b;
+  --ink-inverse: #ffffff;
+  --brand-amber: #ffb12a;
+  --ink-on-amber: #434350;
+  --brand-blue: #007bff;
+  --heading-blue: #1458b3;
+  --accent-pink: #ff6b9d;
+  --accent-orange: #f85001;
+  --accent-crimson: #f01851;
+  --accent-teal: #6498a0;
+  --accent-green: #10b981;
+  --line: #767684;
+  --line-soft: #d9d9e0;
+  --focus-ring: #1458b3;
+  --scrim: rgb(20 20 27 / 0.45);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --surface-100: #14141b;
+    --surface-200: #1d1d27;
+    --surface-300: #282834;
+    --surface-brand: #1d6fd6;
+    --ink: #e8e8ee;
+    --ink-title: #f4f4f9;
+    --ink-muted: #b4b4c2;
+    --brand-blue: #61a9ff;
+    --heading-blue: #9dc0f0;
+    --accent-pink: #ff8fb5;
+    --accent-orange: #ff8a4c;
+    --accent-crimson: #ff6b8e;
+    --accent-teal: #8fc3cb;
+    --accent-green: #34d399;
+    --line: #7a7a8c;
+    --line-soft: #34343f;
+    --focus-ring: #9dc0f0;
+    --scrim: rgb(0 0 0 / 0.6);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --surface-100: #14141b;
+  --surface-200: #1d1d27;
+  --surface-300: #282834;
+  --surface-brand: #1d6fd6;
+  --ink: #e8e8ee;
+  --ink-title: #f4f4f9;
+  --ink-muted: #b4b4c2;
+  --brand-blue: #61a9ff;
+  --heading-blue: #9dc0f0;
+  --accent-pink: #ff8fb5;
+  --accent-orange: #ff8a4c;
+  --accent-crimson: #ff6b8e;
+  --accent-teal: #8fc3cb;
+  --accent-green: #34d399;
+  --line: #7a7a8c;
+  --line-soft: #34343f;
+  --focus-ring: #9dc0f0;
+  --scrim: rgb(0 0 0 / 0.6);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-surface: var(--surface-100);
+  --color-surface-raised: var(--surface-200);
+  --color-surface-sunken: var(--surface-300);
+  --color-surface-brand: var(--surface-brand);
+  --color-ink: var(--ink);
+  --color-ink-title: var(--ink-title);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-inverse: var(--ink-inverse);
+  --color-amber: var(--brand-amber);
+  --color-ink-on-amber: var(--ink-on-amber);
+  --color-blue: var(--brand-blue);
+  --color-link: var(--heading-blue);
+  --color-pink: var(--accent-pink);
+  --color-orange: var(--accent-orange);
+  --color-crimson: var(--accent-crimson);
+  --color-teal: var(--accent-teal);
+  --color-green: var(--accent-green);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-focus: var(--focus-ring);
+  --color-scrim: var(--scrim);
+
+  --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-maple), ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+}
+
+@layer base {
+  html {
+    background: var(--surface-100);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background: var(--surface-100);
+    min-height: 100dvh;
+  }
+  h1, h2, h3 {
+    color: var(--ink-title);
+    text-wrap: balance;
+  }
+  /* Focus is always visible (CLAUDE.md, keyboard layer). */
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /*
+   * The system's own voice: Maple Mono italic, which is cursive. Use it for
+   * hints, keyboard "then"s, metadata, counts, roles, and placeholders, never for
+   * content people wrote or for student names.
+   */
+  .voice {
+    font-family: var(--font-mono);
+    font-style: italic;
+    font-feature-settings: "calt" 1, "liga" 1;
+  }
+  /* Numbers, IDs, dates, scores: Maple Mono upright, aligned digits. */
+  .data {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .kbd {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1;
+    min-width: 1.5em;
+    padding: 0.3em 0.45em;
+    border: 1px solid var(--line);
+    border-bottom-width: 2px;
+    border-radius: var(--radius-sm);
+    background: var(--surface-100);
+    color: var(--ink-title);
+    text-align: center;
+    display: inline-block;
+  }
 }
