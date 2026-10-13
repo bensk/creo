@@ -6,7 +6,7 @@ import { getSql } from "@/core/db/client";
 import type { Db } from "@/core/db/types";
 import { schools } from "@/core/identity/schema";
 import { groupMemberships, groups } from "../../cohorts/schema";
-import { enrollments, studentContacts, studentSupports, students } from "../../students/schema";
+import { enrollments, studentContacts, studentDemographics, studentHealth, studentSupports, students } from "../../students/schema";
 import type { NotionPage } from "../notion/client";
 import { importRuns } from "../schema";
 import { importBigDataTracker } from "./import";
@@ -111,7 +111,8 @@ describe("Big Data Tracker import", () => {
 
   it("matches an existing student by OSIS instead of creating a duplicate", async () => {
     await withSeed(async (tx) => {
-      const [seeded] = await tx.select().from(students).where(eq(students.legalFirstName, "Camila"));
+      // Several seeded students are named Camila; Cami is Camila Martinez.
+      const [seeded] = await tx.select().from(students).where(and(eq(students.legalFirstName, "Camila"), eq(students.legalLastName, "Martinez")));
       const result = await run(tx, [row("p-cami", { First: "Camila", Last: "Martinez", OSIS: Number(seeded!.osis), Homeroom: "7 - Albany Shaniah & Lily" })]);
       expect(result.counts.studentsCreated).toBe(0);
       const [after] = await tx.select().from(students).where(eq(students.id, seeded!.id));
@@ -137,4 +138,29 @@ describe("Big Data Tracker import", () => {
       expect(result.errors.join(" ")).not.toMatch(/Nia|Other|Testcase|9999/);
     });
   });
+
+  it("imports health, demographics, and media consent, and leaves consent alone when the tracker is blank", async () => {
+    await withSeed(async (tx) => {
+      const result = await run(tx, [row("p1", {
+        Allergies: ["My child has allergies"], "Allergy MAF": "Recieved", Gender: "F", Ethnicity: ["Asian"], "Social Media": "No",
+      })]);
+      expect(result.counts).toMatchObject({ healthChanges: 1, demographicsChanges: 1 });
+      const nia = await studentByOsis(tx, "999900001");
+      expect(nia.mediaConsent).toBe("no");
+      const [health] = await tx.select().from(studentHealth).where(eq(studentHealth.studentId, nia.id));
+      expect(health).toMatchObject({ hasAllergies: true, allergyForm: "received", source: "import" });
+      const [demo] = await tx.select().from(studentDemographics).where(eq(studentDemographics.studentId, nia.id));
+      expect(demo).toMatchObject({ gender: "F", ethnicity: ["Asian"] });
+
+      // A blank consent in the tracker doesn't erase what the SIS has.
+      await tx.update(students).set({ mediaConsent: "yes" }).where(eq(students.id, nia.id));
+      await run(tx, [row("p1", { Allergies: ["My child has allergies"], "Allergy MAF": "Recieved", Gender: "F", Ethnicity: ["Asian"] })]);
+      expect((await studentByOsis(tx, "999900001")).mediaConsent).toBe("yes");
+
+      // Audit entries for sensitive tables name fields, not values.
+      const audits = await tx.select({ after: auditLog.after }).from(auditLog).where(eq(auditLog.entity, "student_health"));
+      expect(JSON.stringify(audits)).not.toMatch(/allerg/i);
+    });
+  });
 });
+

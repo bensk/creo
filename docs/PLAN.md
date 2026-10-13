@@ -44,6 +44,9 @@ Effective-dated memberships throughout (`starts_on`, `ends_on` = last day includ
 - `contacts` (user_id, name, phone(s), email [never a creoprep.org address], language, preferred channel)
 - `student_contacts` (relationship, is_guardian, lives_with, pickup_allowed, contact_priority, portal_access, starts_on, ends_on)
 - `student_supports` (type: iep / 504 / ell / other, details, accommodations[], starts_on, ends_on, source) — every column sensitive; no overlapping periods per type
+- `student_health` (one per student: has_allergies, allergy_details, epipen, allergy_medication, food_restrictions, lunch_accommodations[], allergy/asthma/general form status, immunization and physical status and date, source) — every column sensitive
+- `student_demographics` (one per student: gender F/M/X, ethnicity[], home_address, meal_form_status, source) — restricted; the meal column is the form's status, not eligibility
+- `students.media_consent` (yes / no / ask_first; null = unknown, treated as ask first) and `students.medical_alert` (one line every supervising adult sees) — standard
 
 **Enrollment and cohorts**
 - `enrollments` (student_id, school_year_id, grade_level, status, entry/exit dates and codes) — periods may not overlap per student
@@ -391,6 +394,7 @@ Not planned; add only if needed.
 25. Google sign-in uses `google-auth-library`, not Auth.js, so there is one session system (ADR 0002). Student sign-in checks the `/students` OU live in the Directory. Nightly jobs run as Cloud Run jobs started by Cloud Scheduler. Reset and seed are guarded by database name: only `creo_dev`, `*_test`, and confirmed `*_staging`.
 26. Phase 1 schema approved (October 9, 2026), including basic attendance and behavior tables pulled forward to hold Schoolrunner history (read-only until Phases 3 and 4). Student photos are uploaded one at a time by ops. The Big Data Tracker lives in Notion. The Schoolrunner importer waits for an API key.
 27. Big Data Tracker IEP column: Received → IEP; 504 → 504 plan; Missing IEP → IEP noted "not yet received from the previous school"; "No IEP – interested in evaluation" is not stored yet. Next imports to propose: photo consent (Social Media), medical alerts and allergies, demographics and address.
+28. Access matrix question 1 decided by Ben (October 9, 2026): a one-line medical alert on each student is standard sensitivity; allergy and other health details stay sensitive. Photo consent is standard. A blank "Social Media" value in the tracker imports as unknown, never as yes. The tracker's "FRP (meals)" column is the meal form's status, so no income data is stored.
 
 ## Open decisions
 

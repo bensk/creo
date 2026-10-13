@@ -5,7 +5,8 @@ import { users } from "@/core/identity/schema";
 import { schoolYears } from "@/core/school/schema";
 import { ensureGroup, setCurrentGroup } from "../../cohorts/imports";
 import {
-  findStudentByOsis, syncImportedEnrollment, syncImportedSupport, upsertImportedContact, upsertImportedStudent,
+  findStudentByOsis, syncImportedEnrollment, syncImportedSupport, upsertImportedContact, upsertImportedDemographics,
+  upsertImportedHealth, upsertImportedStudent,
 } from "../../students/imports";
 import { findByExternalId, rememberExternalId } from "../external-ids";
 import type { NotionSource } from "../notion/client";
@@ -27,6 +28,8 @@ export interface ImportCounts {
   homeroomChanges: number;
   contactChanges: number;
   supportChanges: number;
+  healthChanges: number;
+  demographicsChanges: number;
   droppedStaffEmails: number;
 }
 
@@ -47,6 +50,7 @@ async function applyStudent(ctx: ImportContext, schoolYearId: string, yearStart:
   const existing = (await findByExternalId(ctx, "big_data_tracker", "students", row.pageId)) ?? (row.osis ? await findStudentByOsis(ctx, row.osis) : null);
   const student = await upsertImportedStudent(ctx, existing, {
     legalFirstName: row.legalFirstName, legalLastName: row.legalLastName, osis: row.osis, dateOfBirth: row.dateOfBirth,
+    mediaConsent: row.mediaConsent ?? undefined,
   });
   await rememberExternalId(ctx, "big_data_tracker", "students", row.pageId, student.id);
   if (student.change === "created") counts.studentsCreated++;
@@ -79,6 +83,8 @@ async function applyStudent(ctx: ImportContext, schoolYearId: string, yearStart:
 
   const support = row.support ? { ...row.support, accommodations: row.accommodations } : null;
   if ((await syncImportedSupport(ctx, student.id, support)) !== "unchanged") counts.supportChanges++;
+  if (row.health && (await upsertImportedHealth(ctx, student.id, row.health)) !== "unchanged") counts.healthChanges++;
+  if (row.demographics && (await upsertImportedDemographics(ctx, student.id, row.demographics)) !== "unchanged") counts.demographicsChanges++;
   counts.droppedStaffEmails += row.droppedStaffEmails;
 }
 
@@ -90,7 +96,8 @@ export async function importBigDataTracker(db: Db, source: NotionSource, options
   const pages = await source.listPages();
   const counts: ImportCounts = {
     rows: pages.length, invalid: 0, studentsCreated: 0, studentsUpdated: 0, studentsUnchanged: 0,
-    enrollmentChanges: 0, homeroomChanges: 0, contactChanges: 0, supportChanges: 0, droppedStaffEmails: 0,
+    enrollmentChanges: 0, homeroomChanges: 0, contactChanges: 0, supportChanges: 0, healthChanges: 0,
+    demographicsChanges: 0, droppedStaffEmails: 0,
   };
   const errors: string[] = [];
 

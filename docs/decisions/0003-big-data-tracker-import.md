@@ -24,14 +24,22 @@ Matching: Notion page ID (kept in `external_ids`), then OSIS. Two rows with the 
 
 Errors are reported by row number and column only. The importer refuses any dev, test, staging, or synthetic database: real student data only ever lands in production.
 
+## Added October 9, 2026
+
+| Tracker column(s) | SIS |
+|---|---|
+| Social Media (No / Ask first) | `students.media_consent` (blank = unknown, never yes; a blank never erases a value the SIS has) |
+| Allergies, Allergen/Reaction/Treatment, Asthma (really the food-restrictions answer), Lunch Accommodations, Allergy/Asthma/General MAF ("Recieved" as spelled), Immunization + date, Physical + date | `student_health` (sensitive) |
+| Gender, Ethnicity, Home Address, FRP (meals) (the form's status, not eligibility) | `student_demographics` (restricted) |
+
+The one-line medical alert is entered by staff in the SIS; it is not derived from the tracker. ATS-entry flags and "No Insurance" are not imported.
+
 ## Not imported yet
 
 These columns have no approved home and are left alone until a schema change is approved for them:
 
-- **Demographics and address** (Gender, Ethnicity, Home Address, FRP/meals): needed for state reporting (Phase 8); restricted or sensitive.
-- **Health** (Allergies, Allergen/Reaction/Treatment, Asthma, MAFs, Immunization, Physical, Lunch Accommodations): sensitive; see access matrix question 1 (medical alerts).
 - **"No IEP – interested in evaluation"** and **Flag Status** (e.g. 12:1:1 IEP, Retained, Academic concern, First Year in States): sensitive; need a decision on where they live.
 - **Scores** (iReady, NYS, IA, Regents): assessments, Phase 7.
 - **Schedules** (Period 1–4, POR, Study Hall, Literacy Group, Advisor, Math/Algebra): sections and groups, Phases 2 and 7.
 - **Operational checkboxes and paperwork** (Seat sack, Locker, Phone pouch, Class supplies, Birth Certificate, Custody Forms, files, SchoolMint/Schoolrunner flags, Google account created, …): the case trackers exist for; move into an "Enrollment and onboarding" tracker in Phase 2.
-- **Student Cell, Social Media (photo consent), Dismissal**: candidates for custom fields; photo consent matters for privacy and should be decided soon.
+- **Student Cell, Dismissal**: candidates for custom fields.

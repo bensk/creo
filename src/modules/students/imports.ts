@@ -1,7 +1,7 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { users } from "@/core/identity/schema";
 import { dayBefore, diff, type ImportContext } from "@/core/imports/context";
-import { contacts, enrollments, studentContacts, studentSupports, students } from "./schema";
+import { contacts, enrollments, studentContacts, studentDemographics, studentHealth, studentSupports, students } from "./schema";
 
 // Public write functions for importers (integrations module). Each is
 // idempotent and audits what it changes. Only fields an import owns are
@@ -12,6 +12,8 @@ export interface ImportedStudent {
   legalLastName: string;
   osis: string | null;
   dateOfBirth: string | null;
+  /** Undefined = the source has no value; leave whatever the SIS has. */
+  mediaConsent?: "yes" | "no" | "ask_first";
 }
 
 export async function findStudentByOsis(ctx: ImportContext, osis: string): Promise<string | null> {
@@ -26,7 +28,10 @@ export async function upsertImportedStudent(ctx: ImportContext, existingId: stri
     return { id: row!.id, change: "created" as const };
   }
   const [current] = await ctx.db
-    .select({ legalFirstName: students.legalFirstName, legalLastName: students.legalLastName, osis: students.osis, dateOfBirth: students.dateOfBirth })
+    .select({
+      legalFirstName: students.legalFirstName, legalLastName: students.legalLastName, osis: students.osis,
+      dateOfBirth: students.dateOfBirth, mediaConsent: students.mediaConsent,
+    })
     .from(students)
     .where(eq(students.id, existingId));
   const d = diff(current!, data);
@@ -208,4 +213,40 @@ export async function linkStudentAccount(ctx: ImportContext, studentId: string, 
   }
   await ctx.db.update(students).set({ googleEmail: email, userId, version: sql`${students.version} + 1` }).where(eq(students.id, studentId));
   await ctx.audit("student.link_google_account", "students", studentId, { googleEmail: current!.googleEmail }, { googleEmail: email });
+}
+
+/**
+ * One-row-per-student tables (health, demographics): create or overwrite with
+ * the import's values. Audit entries name the fields that changed, not their
+ * values, because both tables are above standard sensitivity.
+ */
+async function upsertOneRow<T extends Record<string, unknown>>(
+  ctx: ImportContext,
+  table: typeof studentHealth | typeof studentDemographics,
+  entity: string,
+  studentId: string,
+  values: T,
+): Promise<"created" | "updated" | "unchanged"> {
+  const [current] = await ctx.db.select().from(table).where(eq(table.studentId, studentId));
+  if (!current) {
+    const [row] = await ctx.db
+      .insert(table)
+      .values({ schoolId: ctx.schoolId, createdBy: ctx.actorUserId, studentId, source: "import", ...values } as never)
+      .returning({ id: table.id });
+    await ctx.audit(`${entity}.create`, entity, row!.id, null, { source: "import" });
+    return "created";
+  }
+  const changed = Object.keys(values).filter((k) => JSON.stringify((current as Record<string, unknown>)[k]) !== JSON.stringify(values[k]));
+  if (changed.length === 0) return "unchanged";
+  await ctx.db.update(table).set({ ...values, source: "import" } as never).where(eq(table.id, current.id));
+  await ctx.audit(`${entity}.update`, entity, current.id, null, { fields: changed });
+  return "updated";
+}
+
+export function upsertImportedHealth(ctx: ImportContext, studentId: string, values: Omit<typeof studentHealth.$inferInsert, "schoolId" | "createdBy" | "studentId" | "source">) {
+  return upsertOneRow(ctx, studentHealth, "student_health", studentId, values);
+}
+
+export function upsertImportedDemographics(ctx: ImportContext, studentId: string, values: Omit<typeof studentDemographics.$inferInsert, "schoolId" | "createdBy" | "studentId" | "source">) {
+  return upsertOneRow(ctx, studentDemographics, "student_demographics", studentId, values);
 }
