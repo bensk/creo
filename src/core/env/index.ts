@@ -21,6 +21,9 @@ const serverEnvSchema = z
     // Directory (Admin SDK) via a service account with domain-wide delegation.
     GOOGLE_DIRECTORY_CREDENTIALS: z.string().min(1).optional(),
     GOOGLE_DIRECTORY_ADMIN: z.email().optional(),
+    // Cloud Storage bucket for files (pronunciation audio, photos, slips). Without
+    // it, development and tests keep files under data/files; production refuses.
+    FILES_BUCKET: z.string().min(1).optional(),
   })
   .refine((env) => !(env.NODE_ENV === "production" && env.DEV_SIGN_IN !== undefined), {
     // Any value at all in production is a misconfiguration: refuse to start.

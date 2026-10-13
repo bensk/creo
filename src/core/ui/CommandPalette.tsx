@@ -17,6 +17,7 @@ export interface StudentResult {
   name: string;
   nameParts: StudentNameParts;
   phonetic: string | null;
+  audioUrl: string | null;
   grade: number | null;
   homeroom: string | null;
   enrolled: boolean;
@@ -116,7 +117,7 @@ export function CommandPalette({
                 keywords={[query]}
                 onSelect={() => go(`/students/${s.id}`)}
               >
-                <StudentName student={s.nameParts} phonetic={s.phonetic} className="font-medium text-ink-title" />
+                <StudentName student={s.nameParts} phonetic={s.phonetic} audioUrl={s.audioUrl} className="font-medium text-ink-title" />
                 <span className="voice ml-auto text-xs text-ink-muted">
                   {s.enrolled
                     ? [s.grade ? `grade ${s.grade}` : null, s.homeroom].filter(Boolean).join(" · ")
