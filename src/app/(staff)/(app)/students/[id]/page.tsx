@@ -4,11 +4,15 @@ import { requireViewer } from "@/core/auth/server";
 import { getDb } from "@/core/db/client";
 import { can, visibleLevels } from "@/core/permissions";
 import { readForViewer } from "@/core/permissions/read";
-import { StudentName } from "@/core/ui/StudentName";
+import { pronunciationAudioUrl, StudentName } from "@/core/ui/StudentName";
+import { fieldContext } from "@/core/query/run";
+import { attendanceSummary, recentAttendanceExceptions } from "@/modules/attendance/queries";
+import { recentBehavior } from "@/modules/behavior/queries";
 import { membershipsForStudent } from "@/modules/cohorts/queries";
 import {
   contactsForStudent, currentPronunciation, demographicsForStudent, enrollmentHistory, getStudent, healthForStudent, supportsForStudent,
 } from "@/modules/students/queries";
+import { PronunciationEditor } from "@/modules/students/ui/PronunciationEditor";
 
 export const metadata = { title: "Student" };
 
@@ -32,13 +36,34 @@ export default async function StudentProfile({ params }: { params: Promise<{ id:
   if (!row) notFound();
   // Drops fields above the viewer's sensitivity and logs any restricted fields shown.
   const student = await readForViewer(db, viewer, "students", row.id, row);
-  const [memberships, enrollments, contacts, pronunciation, levels] = await Promise.all([
+  const [memberships, enrollments, contacts, pronunciation, levels, canEditName] = await Promise.all([
     membershipsForStudent(db, row.id),
     enrollmentHistory(db, row.id),
     contactsForStudent(db, row.id),
     currentPronunciation(db, row.id),
     visibleLevels(db, viewer, row.id),
+    can(db, viewer, "students.edit_identity", { studentId: row.id }),
   ]);
+  const { schoolYearStart } = await fieldContext(db, viewer.schoolId);
+  const [attendance, absences, behaviorRows] = await Promise.all([
+    attendanceSummary(db, row.id, schoolYearStart),
+    recentAttendanceExceptions(db, row.id, 30),
+    recentBehavior(db, row.id, 30),
+  ]);
+  // Narratives are confidential: shown (and logged) only to viewers who may see them.
+  const behavior = await Promise.all(
+    behaviorRows.map(async (e) => ({
+      ...e,
+      narrative: e.narrative
+        ? ((await readForViewer(db, viewer, "behavior_events", row.id, { narrative: e.narrative }, { entityId: e.id })).narrative ?? null)
+        : null,
+    })),
+  );
+  const timeline = [
+    ...absences.map((a) => ({ kind: "attendance" as const, key: a.id, at: `${a.date}T12:00:00Z`, a })),
+    ...behavior.map((b) => ({ kind: "behavior" as const, key: b.id, at: b.occurredAt.toISOString(), b })),
+  ].sort((x, y) => y.at.localeCompare(x.at)).slice(0, 40);
+  const audioUrl = pronunciation?.audioObjectKey ? pronunciationAudioUrl(pronunciation.id) : null;
   // Supports are sensitive: only loaded (and logged) for viewers who may see them for this student.
   const supports = levels.has("sensitive")
     ? await Promise.all((await supportsForStudent(db, row.id)).map((s) => readForViewer(db, viewer, "student_supports", row.id, s, { entityId: s.id })))
@@ -60,8 +85,14 @@ export default async function StudentProfile({ params }: { params: Promise<{ id:
     <article className="grid max-w-5xl gap-10">
       <header className="grid gap-2 border-b border-line-soft pb-6">
         <h1 className="text-4xl font-bold tracking-tight">
-          <StudentName student={row} phonetic={pronunciation?.phonetic} />
+          <StudentName student={row} phonetic={pronunciation?.phonetic} audioUrl={audioUrl} />
         </h1>
+        <PronunciationEditor
+          studentId={row.id}
+          phonetic={pronunciation?.phonetic ?? null}
+          audioUrl={audioUrl}
+          canEdit={canEditName}
+        />
         <p className="voice text-sm text-ink-muted">
           {[
             row.pronouns,
@@ -160,6 +191,45 @@ export default async function StudentProfile({ params }: { params: Promise<{ id:
               </dl>
             </section>
           )}
+
+          <section aria-labelledby="timeline-h" className="grid gap-3">
+            <div className="flex items-baseline justify-between gap-2">
+              <h2 id="timeline-h" className="text-lg font-semibold">Timeline</h2>
+              <span className="voice text-xs text-ink-muted">
+                {attendance.rate === null
+                  ? "no attendance this year"
+                  : `${attendance.rate}% attendance this year · ${attendance.absent + attendance.excused} absences · ${attendance.tardy} tardies`}
+              </span>
+            </div>
+            {timeline.length === 0 ? (
+              <p className="voice text-sm text-ink-muted">nothing yet. absences, tardies, and behavior show here.</p>
+            ) : (
+              <ol className="grid gap-0">
+                {timeline.map((t) => (
+                  <li key={t.key} className="grid grid-cols-[6.5rem_1fr] gap-3 border-t border-line-soft py-2 text-sm">
+                    <span className="data text-xs text-ink-muted">{fmt(t.at.slice(0, 10))}</span>
+                    {t.kind === "attendance" ? (
+                      <span>
+                        <span className="font-medium text-ink-title">{t.a.label}</span>
+                        {t.a.note && <span className="block text-ink-muted">{t.a.note}</span>}
+                      </span>
+                    ) : (
+                      <span>
+                        <span className="font-medium text-ink-title">{t.b.typeLabel}</span>
+                        <span className="data ml-2 whitespace-nowrap text-xs text-ink-muted">{t.b.points > 0 ? `+${t.b.points}` : `−${-t.b.points}`}</span>
+                        <span className="block text-xs text-ink-muted">
+                          {t.b.location && <span className="voice">{t.b.location.toLowerCase()}</span>}
+                          {t.b.location && t.b.staffGiven && <span className="voice"> · </span>}
+                          {t.b.staffGiven && `${t.b.staffName || t.b.staffGiven} ${t.b.staffFamily}`}
+                        </span>
+                        {t.b.narrative && <span className="mt-1 block">{t.b.narrative}</span>}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
 
           <section aria-labelledby="contacts-h" className="grid gap-3">
             <h2 id="contacts-h" className="text-lg font-semibold">Family contacts</h2>

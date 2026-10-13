@@ -82,6 +82,11 @@ export async function searchStudents(db: Db, schoolId: string, query: string, li
         select np.phonetic from name_pronunciations np
         where np.student_id = ${outerId} order by np.created_at desc limit 1
       )`,
+      // The current pronunciation's id when it has a recording (for the play button).
+      audioId: sql<string | null>`(
+        select case when np.audio_object_key is not null then np.id end from name_pronunciations np
+        where np.student_id = ${outerId} order by np.created_at desc limit 1
+      )`,
     })
     .from(students)
     .where(and(eq(students.schoolId, schoolId), ...matches))
@@ -141,7 +146,7 @@ export async function supportsForStudent(db: Db, studentId: string) {
 /** The current pronunciation (newest), if any. */
 export async function currentPronunciation(db: Db, studentId: string) {
   const [row] = await db
-    .select({ phonetic: namePronunciations.phonetic, audioObjectKey: namePronunciations.audioObjectKey })
+    .select({ id: namePronunciations.id, phonetic: namePronunciations.phonetic, audioObjectKey: namePronunciations.audioObjectKey })
     .from(namePronunciations)
     .where(eq(namePronunciations.studentId, studentId))
     .orderBy(sql`${namePronunciations.createdAt} desc`)
