@@ -3,7 +3,7 @@ import { check, index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from
 import { base } from "../../core/db/base";
 import { sqlList } from "../../core/db/columns";
 
-export const IMPORT_SOURCES = ["big_data_tracker", "schoolrunner"] as const;
+export const IMPORT_SOURCES = ["big_data_tracker", "schoolrunner", "clever"] as const;
 
 // One row per import run. error_summary never contains student details.
 export const importRuns = pgTable(

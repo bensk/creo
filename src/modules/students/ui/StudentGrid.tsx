@@ -3,6 +3,7 @@
 import {
   DataEditor,
   GridCellKind,
+  type DataEditorRef,
   type EditableGridCell,
   type GridCell,
   type GridColumn,
@@ -84,6 +85,7 @@ export function StudentGrid({
   const [panel, setPanel] = useState<"filter" | "columns" | "views" | "bulk" | null>(null);
   const [loading, startLoading] = useTransition();
   const [theme, setTheme] = useState<Partial<Theme>>({});
+  const gridRef = useRef<DataEditorRef>(null);
   const [selection, setSelection] = useState<GridSelection>({ columns: CompactSelection.empty(), rows: CompactSelection.empty() });
   const searchRef = useRef<HTMLInputElement>(null);
   const firstRun = useRef(true);
@@ -305,13 +307,18 @@ export function StudentGrid({
           rows={result.rows.length}
           getCellContent={getCellContent}
           getCellsForSelection
+          ref={gridRef}
           onCellEdited={onCellEdited}
+          // Glide selects the cell but leaves focus where it was (e.g. the
+          // search box), so keys would go there. Clicking a cell moves focus in.
+          onCellClicked={() => gridRef.current?.focus()}
           onCellActivated={([col, row]) => {
             if (columns[col]?.key === "name") openStudent(row);
           }}
           gridSelection={selection}
           onGridSelectionChange={setSelection}
           rowMarkers={userCanEdit ? { kind: "checkbox-visible", checkboxStyle: "square" } : "number"}
+          rowMarkerWidth={44}
           rowSelect="multi"
           rowSelectionMode="multi"
           smoothScrollX

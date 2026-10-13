@@ -5,12 +5,13 @@ import { users } from "@/core/identity/schema";
 import { schoolYears } from "@/core/school/schema";
 import { ensureGroup, setCurrentGroup } from "../../cohorts/imports";
 import {
-  findStudentByOsis, syncImportedEnrollment, syncImportedSupport, upsertImportedContact, upsertImportedDemographics,
-  upsertImportedHealth, upsertImportedStudent,
+  findStudentByOsis, syncImportedEnrollment, syncImportedSupport, syncImportedSupports, updateImportedStudentFields,
+  upsertImportedContact, upsertImportedDemographics, upsertImportedHealth, upsertImportedStudent,
 } from "../../students/imports";
+import { supportsForStudent } from "../../students/queries";
 import { findByExternalId, rememberExternalId } from "../external-ids";
 import type { NotionSource } from "../notion/client";
-import { importRuns } from "../schema";
+import { externalIds, importRuns } from "../schema";
 import { mapBdtRow, type BdtStudent } from "./map";
 
 // The Big Data Tracker import: Notion → students, enrollments, homerooms,
@@ -46,8 +47,42 @@ async function importActor(db: Db, schoolId: string): Promise<string> {
   return id;
 }
 
+/** Whether Clever's files have this student. Clever wins for the roster fields it carries. */
+async function inClever(ctx: ImportContext, studentId: string): Promise<boolean> {
+  const [row] = await ctx.db.select({ id: externalIds.id }).from(externalIds)
+    .where(and(eq(externalIds.schoolId, ctx.schoolId), eq(externalIds.source, "clever"), eq(externalIds.entity, "students"), eq(externalIds.entityId, studentId)));
+  return Boolean(row);
+}
+
+/**
+ * A student Clever already covers: the tracker only adds what Clever doesn't
+ * carry (photo consent, health, the meal form, 504 plans, and testing
+ * accommodations on an IEP Clever reported). Names, OSIS, DOB, grade,
+ * homeroom, contacts, IEP and ELL status, and demographics come from Clever.
+ */
+async function applyNonCleverFields(ctx: ImportContext, studentId: string, row: BdtStudent, counts: ImportCounts) {
+  if ((await updateImportedStudentFields(ctx, studentId, { mediaConsent: row.mediaConsent ?? undefined })) === "updated") counts.studentsUpdated++;
+  else counts.studentsUnchanged++;
+  const wanted504 = row.support?.type === "504" ? [{ type: "504" as const, details: row.support.details, accommodations: row.accommodations }] : [];
+  if ((await syncImportedSupports(ctx, studentId, ["504"], wanted504)) !== "unchanged") counts.supportChanges++;
+  if (row.support?.type === "iep") {
+    const iep = (await supportsForStudent(ctx.db, studentId)).find((s) => s.type === "iep" && s.source === "import" && !s.endsOn);
+    if (iep && (await syncImportedSupports(ctx, studentId, ["iep"], [{ type: "iep", accommodations: row.accommodations }])) !== "unchanged") counts.supportChanges++;
+  }
+  if (row.health && (await upsertImportedHealth(ctx, studentId, row.health)) !== "unchanged") counts.healthChanges++;
+  if (row.demographics?.mealFormStatus !== undefined
+    && (await upsertImportedDemographics(ctx, studentId, { mealFormStatus: row.demographics.mealFormStatus })) !== "unchanged") {
+    counts.demographicsChanges++;
+  }
+}
+
 async function applyStudent(ctx: ImportContext, schoolYearId: string, yearStart: string, row: BdtStudent, counts: ImportCounts) {
   const existing = (await findByExternalId(ctx, "big_data_tracker", "students", row.pageId)) ?? (row.osis ? await findStudentByOsis(ctx, row.osis) : null);
+  if (existing && (await inClever(ctx, existing))) {
+    await rememberExternalId(ctx, "big_data_tracker", "students", row.pageId, existing);
+    await applyNonCleverFields(ctx, existing, row, counts);
+    return;
+  }
   const student = await upsertImportedStudent(ctx, existing, {
     legalFirstName: row.legalFirstName, legalLastName: row.legalLastName, osis: row.osis, dateOfBirth: row.dateOfBirth,
     mediaConsent: row.mediaConsent ?? undefined,

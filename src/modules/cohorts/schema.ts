@@ -80,3 +80,104 @@ export const groupStaff = pgTable(
     check("group_staff_dates_check", sql.raw(`ends_on is null or ends_on >= starts_on`)),
   ],
 );
+
+// Courses and sections (classes). Imported from Clever's files today; later the
+// SIS will write those files itself, so each keeps its Clever ID in external_ids.
+
+export const courses = pgTable(
+  "courses",
+  {
+    ...base(),
+    schoolYearId: uuid("school_year_id")
+      .notNull()
+      .references(() => schoolYears.id),
+    name: text("name").notNull(),
+    number: text("number"),
+    subject: text("subject"),
+    description: text("description"),
+  },
+  (t) => [
+    uniqueIndex("courses_year_number_idx").on(t.schoolYearId, t.number),
+    index("courses_school_idx").on(t.schoolId),
+    index("courses_created_by_idx").on(t.createdBy),
+  ],
+);
+
+export const sections = pgTable(
+  "sections",
+  {
+    ...base(),
+    schoolYearId: uuid("school_year_id")
+      .notNull()
+      .references(() => schoolYears.id),
+    courseId: uuid("course_id").references(() => courses.id),
+    name: text("name").notNull(),
+    sectionNumber: text("section_number"),
+    period: text("period"),
+    gradeLevel: smallint("grade_level"),
+    termName: text("term_name"),
+    termStartsOn: date("term_starts_on"),
+    termEndsOn: date("term_ends_on"),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("sections_year_idx").on(t.schoolYearId),
+    index("sections_course_idx").on(t.courseId),
+    index("sections_school_idx").on(t.schoolId),
+    index("sections_created_by_idx").on(t.createdBy),
+    check("sections_grade_check", sql.raw(`grade_level is null or grade_level between 5 and 8`)),
+    check("sections_term_check", sql.raw(`term_ends_on is null or term_starts_on is null or term_ends_on >= term_starts_on`)),
+  ],
+);
+
+export const SECTION_STAFF_ROLES = ["primary", "co_teacher"] as const;
+
+// Who teaches a section. Effective-dated, so a change of teacher keeps history.
+// Counts as an assignment: section teachers see sensitive fields (e.g.
+// accommodations) for their section's students.
+export const sectionStaff = pgTable(
+  "section_staff",
+  {
+    ...base(),
+    sectionId: uuid("section_id")
+      .notNull()
+      .references(() => sections.id),
+    staffId: uuid("staff_id")
+      .notNull()
+      .references(() => staff.id),
+    role: text("role").notNull(),
+    startsOn: date("starts_on").notNull(),
+    endsOn: date("ends_on"),
+  },
+  (t) => [
+    index("section_staff_section_idx").on(t.sectionId),
+    index("section_staff_staff_idx").on(t.staffId),
+    index("section_staff_school_idx").on(t.schoolId),
+    index("section_staff_created_by_idx").on(t.createdBy),
+    check("section_staff_role_check", sql.raw(`role in (${sqlList(SECTION_STAFF_ROLES)})`)),
+    check("section_staff_dates_check", sql.raw(`ends_on is null or ends_on >= starts_on`)),
+  ],
+);
+
+// Which students are in a section, effective-dated like group memberships.
+export const sectionEnrollments = pgTable(
+  "section_enrollments",
+  {
+    ...base(),
+    sectionId: uuid("section_id")
+      .notNull()
+      .references(() => sections.id),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id),
+    startsOn: date("starts_on").notNull(),
+    endsOn: date("ends_on"),
+  },
+  (t) => [
+    index("section_enrollments_section_idx").on(t.sectionId),
+    index("section_enrollments_student_idx").on(t.studentId),
+    index("section_enrollments_school_idx").on(t.schoolId),
+    index("section_enrollments_created_by_idx").on(t.createdBy),
+    check("section_enrollments_dates_check", sql.raw(`ends_on is null or ends_on >= starts_on`)),
+  ],
+);

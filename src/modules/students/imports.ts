@@ -132,44 +132,121 @@ export async function upsertImportedContact(ctx: ImportContext, studentId: strin
   return { id: contactId, change };
 }
 
+export type SupportType = "iep" | "504" | "ell";
+
+export interface WantedSupport {
+  type: SupportType;
+  /** Undefined: keep what the row has (a source that only says yes/no). */
+  details?: string | null;
+  accommodations?: string[];
+}
+
 /**
- * Keeps import-sourced IEP/504 rows in line with the import. Manually entered
- * supports are never touched. A support the import no longer reports ends yesterday.
+ * Keeps import-sourced supports of the `managed` types in line with `wanted`.
+ * Types a source doesn't report are left alone (Clever has no 504 column), and
+ * manually entered supports are never touched. A support the source stops
+ * reporting ends yesterday. Returns what changed.
  */
-export async function syncImportedSupport(
-  ctx: ImportContext,
-  studentId: string,
-  wanted: { type: "iep" | "504"; details: string | null; accommodations: string[] } | null,
-) {
-  const current = await ctx.db
+export async function syncImportedSupports(ctx: ImportContext, studentId: string, managed: readonly SupportType[], wanted: readonly WantedSupport[]) {
+  const current = (await ctx.db
     .select()
     .from(studentSupports)
-    .where(and(eq(studentSupports.studentId, studentId), eq(studentSupports.source, "import"), isNull(studentSupports.endsOn)));
+    .where(and(eq(studentSupports.studentId, studentId), eq(studentSupports.source, "import"), isNull(studentSupports.endsOn))))
+    .filter((r) => managed.includes(r.type as SupportType));
   let change: "created" | "updated" | "ended" | "unchanged" = "unchanged";
   for (const row of current) {
-    if (wanted && row.type === wanted.type) continue;
+    if (wanted.some((w) => w.type === row.type)) continue;
     const endsOn = dayBefore(ctx.today) < row.startsOn ? row.startsOn : dayBefore(ctx.today);
     await ctx.db.update(studentSupports).set({ endsOn }).where(eq(studentSupports.id, row.id));
     await ctx.audit("student_support.end", "student_supports", row.id, null, { endsOn });
     change = "ended";
   }
-  if (!wanted) return change;
-  const existing = current.find((r) => r.type === wanted.type);
-  const fields = { details: wanted.details, accommodations: wanted.accommodations };
-  if (!existing) {
-    const [row] = await ctx.db
-      .insert(studentSupports)
-      .values({ schoolId: ctx.schoolId, createdBy: ctx.actorUserId, studentId, type: wanted.type, ...fields, startsOn: ctx.today, source: "import" })
-      .returning({ id: studentSupports.id });
-    // Audit values stay out of the log entry's "after": supports are sensitive.
-    await ctx.audit("student_support.create", "student_supports", row!.id, null, { source: "import" });
-    return "created";
+  for (const w of wanted) {
+    if (!managed.includes(w.type)) continue;
+    const existing = current.find((r) => r.type === w.type);
+    if (!existing) {
+      // A manually entered support of the same type already covers it.
+      const [manual] = await ctx.db.select({ id: studentSupports.id }).from(studentSupports)
+        .where(and(eq(studentSupports.studentId, studentId), eq(studentSupports.type, w.type), isNull(studentSupports.endsOn)));
+      if (manual) continue;
+      const [row] = await ctx.db
+        .insert(studentSupports)
+        .values({
+          schoolId: ctx.schoolId, createdBy: ctx.actorUserId, studentId, type: w.type, details: w.details ?? null,
+          accommodations: w.accommodations ?? [], startsOn: ctx.today, source: "import",
+        })
+        .returning({ id: studentSupports.id });
+      // Audit values stay out of the log entry's "after": supports are sensitive.
+      await ctx.audit("student_support.create", "student_supports", row!.id, null, { source: "import" });
+      change = "created";
+      continue;
+    }
+    const fields = {
+      ...(w.details !== undefined ? { details: w.details } : {}),
+      ...(w.accommodations !== undefined ? { accommodations: w.accommodations } : {}),
+    };
+    const same = (fields.details === undefined || fields.details === existing.details)
+      && (fields.accommodations === undefined || fields.accommodations.join("|") === existing.accommodations.join("|"));
+    if (same) continue;
+    await ctx.db.update(studentSupports).set(fields).where(eq(studentSupports.id, existing.id));
+    await ctx.audit("student_support.update", "student_supports", existing.id, null, { source: "import" });
+    if (change === "unchanged") change = "updated";
   }
-  const sameAccommodations = existing.accommodations.join("|") === wanted.accommodations.join("|");
-  if (existing.details === wanted.details && sameAccommodations) return change;
-  await ctx.db.update(studentSupports).set(fields).where(eq(studentSupports.id, existing.id));
-  await ctx.audit("student_support.update", "student_supports", existing.id, null, { source: "import" });
-  return "updated";
+  return change;
+}
+
+/** The Big Data Tracker's IEP/504: it manages both types and reports at most one. */
+export function syncImportedSupport(
+  ctx: ImportContext,
+  studentId: string,
+  wanted: { type: "iep" | "504"; details: string | null; accommodations: string[] } | null,
+) {
+  return syncImportedSupports(ctx, studentId, ["iep", "504"], wanted ? [wanted] : []);
+}
+
+/** Updates only the given student fields (a source that owns some fields but not others). */
+export async function updateImportedStudentFields(ctx: ImportContext, studentId: string, data: Partial<ImportedStudent>) {
+  const defined = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined)) as Partial<ImportedStudent>;
+  if (Object.keys(defined).length === 0) return "unchanged" as const;
+  const [current] = await ctx.db
+    .select({
+      legalFirstName: students.legalFirstName, legalLastName: students.legalLastName, osis: students.osis,
+      dateOfBirth: students.dateOfBirth, mediaConsent: students.mediaConsent,
+    })
+    .from(students)
+    .where(eq(students.id, studentId));
+  const d = diff(current!, defined);
+  if (!d.changed) return "unchanged" as const;
+  await ctx.db.update(students).set({ ...defined, version: sql`${students.version} + 1` }).where(eq(students.id, studentId));
+  await ctx.audit("student.update", "students", studentId, d.before, d.after);
+  return "updated" as const;
+}
+
+/** One of the student's current contacts with this name, if any (so two sources don't create the same parent twice). */
+export async function findCurrentContactByName(ctx: ImportContext, studentId: string, firstName: string, lastName: string): Promise<string | null> {
+  const [row] = await ctx.db
+    .select({ id: contacts.id })
+    .from(studentContacts)
+    .innerJoin(contacts, eq(contacts.id, studentContacts.contactId))
+    .where(and(
+      eq(studentContacts.studentId, studentId), isNull(studentContacts.endsOn),
+      sql`lower(${contacts.firstName}) = lower(${firstName})`, sql`lower(${contacts.lastName}) = lower(${lastName})`,
+    ))
+    .limit(1);
+  return row?.id ?? null;
+}
+
+/** Ends a student's current link to a contact (the source no longer lists them). The contact record stays. */
+export async function endContactLink(ctx: ImportContext, studentId: string, contactId: string): Promise<boolean> {
+  const [link] = await ctx.db
+    .select({ id: studentContacts.id, startsOn: studentContacts.startsOn })
+    .from(studentContacts)
+    .where(and(eq(studentContacts.studentId, studentId), eq(studentContacts.contactId, contactId), isNull(studentContacts.endsOn)));
+  if (!link) return false;
+  const endsOn = dayBefore(ctx.today) < link.startsOn ? link.startsOn : dayBefore(ctx.today);
+  await ctx.db.update(studentContacts).set({ endsOn }).where(eq(studentContacts.id, link.id));
+  await ctx.audit("student_contact.end", "student_contacts", link.id, null, { endsOn });
+  return true;
 }
 
 /** Currently enrolled students in a grade, with what's needed to match a Google account. */

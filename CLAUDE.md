@@ -81,7 +81,7 @@ src/
     family/               # family portal, visibility settings, slips and progress reports
     student-portal/       # student questions, slip reflections, student visibility
     slack/                # Slack app: commands, shortcuts, modals, App Home, notifications, canvases
-    integrations/         # google, schoolrunner import
+    integrations/         # google, Big Data Tracker, Clever roster files, Schoolrunner exports
     reporting/            # SIRS / state exports
 docs/
   PLAN.md
