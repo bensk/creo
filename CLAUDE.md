@@ -110,7 +110,7 @@ Modules may import from `core/` and read other modules only through their export
 
 ### One query language
 
-Grid filters, saved views, dynamic lists, eligibility rules, and dashboard widgets all use the same JSON **query spec**, defined in `core/query/spec.ts` and compiled to SQL in `core/query/compile.ts`. Modules register sources, metrics, and dimensions in their manifest. Never write a second filtering system. Never let users or the AI submit raw SQL.
+Grid filters, saved views, dynamic lists, eligibility rules, and dashboard widgets all use the same JSON **query spec**, defined in `core/query/spec.ts` and compiled to SQL in `core/query/compile.ts`. Modules register sources, metrics, and dimensions in their manifest. Never write a second filtering system. Never let users or the AI submit raw SQL. A module adds fields to another module's source with `sourceFields: { <source>: FieldDef[] }` in its manifest; every field declares a type and a sensitivity, and the compiler (not the UI) hides, blanks, or refuses fields the viewer may not see. Run queries with `runQuery(db, viewer, spec)` from `core/query/run.ts`.
 
 ### Flexible data without migrations
 

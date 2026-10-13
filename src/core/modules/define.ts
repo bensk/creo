@@ -1,4 +1,5 @@
 import type { FieldSensitivity } from "../permissions/sensitivity";
+import type { FieldDef, SourceDef } from "../query/source";
 
 // The module contract. Every module in src/modules/<id>/manifest.ts exports
 // `manifest = defineModule({...})`, and src/modules/index.ts registers it.
@@ -38,6 +39,10 @@ export interface ModuleManifest {
    */
   fieldSensitivity?: Readonly<Record<string, FieldSensitivity>>;
   permissions?: readonly PermissionDef[];
+  /** Query sources this module owns (e.g. "students"). */
+  sources?: readonly SourceDef[];
+  /** Fields this module adds to any module's source, keyed by source id. */
+  sourceFields?: Readonly<Record<string, readonly FieldDef[]>>;
   nav?: readonly NavItem[];
   commands?: readonly CommandDef[];
 }

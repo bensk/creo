@@ -19,7 +19,7 @@ export interface Destination {
 
 export const DESTINATIONS: readonly Destination[] = [
   { slug: "", label: "Home", href: "/", summary: "Your groups and your day." },
-  { slug: "students", label: "Students", href: "/students", goKey: "s", permission: "students.view", arrivesIn: "Phase 1", summary: "Search, profiles, and the student grid." },
+  { slug: "students", label: "Students", href: "/students", goKey: "s", permission: "students.view", summary: "Search, profiles, and the student grid." },
   { slug: "attendance", label: "Attendance", href: "/attendance", goKey: "a", arrivesIn: "Phase 3", summary: "Daily homeroom attendance, by keyboard or touch." },
   { slug: "behavior", label: "Behavior", href: "/behavior", goKey: "b", arrivesIn: "Phase 4", summary: "Behavior events, points, and restorative follow-ups." },
   { slug: "communication", label: "Communication", href: "/communication", goKey: "c", arrivesIn: "Phase 4", summary: "Calls, texts, emails, and meetings with families." },
