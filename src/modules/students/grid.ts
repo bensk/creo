@@ -7,6 +7,7 @@ import { authorize, Forbidden } from "@/core/permissions";
 import { savedViews } from "@/core/query/schema";
 import { QueryError, runQuery } from "@/core/query/run";
 import { querySpecSchema, type QuerySpecInput } from "@/core/query/spec";
+import { setCustomValue } from "./custom-fields";
 import { students } from "./schema";
 
 // The student grid's logic, free of Next.js so it can be tested directly.
@@ -36,7 +37,8 @@ export const EDITABLE_FIELDS = Object.keys(EDITABLE) as EditableField[];
 export const cellInput = z.object({
   studentId: z.uuid(),
   version: z.number().int().min(1),
-  field: z.enum(EDITABLE_FIELDS as [EditableField, ...EditableField[]]),
+  // A built-in editable field, or "custom.<key>" for a custom field.
+  field: z.union([z.enum(EDITABLE_FIELDS as [EditableField, ...EditableField[]]), z.string().regex(/^custom\.[a-z][a-z0-9_]{0,62}$/)]),
   value: z.unknown(),
 });
 
@@ -50,7 +52,11 @@ const CONFLICT = "Someone else changed this student. Reload to see their change.
 export async function updateStudentCell(db: Db, viewer: StaffViewer, input: z.input<typeof cellInput>): Promise<ActionResult<{ version: number }>> {
   const parsed = cellInput.safeParse(input);
   if (!parsed.success) return { ok: false, error: "That change isn't valid." };
-  const spec = EDITABLE[parsed.data.field];
+  if (parsed.data.field.startsWith("custom.")) {
+    const set = await setCustomValue(db, viewer, { studentId: parsed.data.studentId, version: parsed.data.version, key: parsed.data.field.slice(7), value: parsed.data.value });
+    return set.ok ? { ok: true, data: { version: set.data.version } } : set;
+  }
+  const spec = EDITABLE[parsed.data.field as EditableField];
   const raw = typeof parsed.data.value === "string" && parsed.data.value.trim() === "" ? null : parsed.data.value;
   const value = spec.value.safeParse(raw);
   if (!value.success) return { ok: false, error: "That value isn't allowed here." };
@@ -135,4 +141,35 @@ export async function deleteStudentView(db: Db, viewer: StaffViewer, id: string)
     if (error instanceof QueryError) return { ok: false, error: error.message };
     throw error;
   }
+}
+
+export const bulkInput = z.object({
+  field: cellInput.shape.field,
+  value: z.unknown(),
+  rows: z.array(z.object({ studentId: z.uuid(), version: z.number().int().min(1) })).min(1).max(500),
+});
+
+export interface BulkResult {
+  updated: { studentId: string; version: number }[];
+  skipped: { studentId: string; reason: string }[];
+}
+
+/**
+ * Sets one field to one value for many students, in one transaction. Each
+ * student goes through the same checks as a single edit (permission for that
+ * student, version, validation, audit); students that fail are skipped and
+ * reported, the rest are saved.
+ */
+export async function bulkUpdateStudents(db: Db, viewer: StaffViewer, input: z.input<typeof bulkInput>): Promise<ActionResult<BulkResult>> {
+  const parsed = bulkInput.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "That change isn't valid." };
+  const result: BulkResult = { updated: [], skipped: [] };
+  await db.transaction(async (tx) => {
+    for (const row of parsed.data.rows) {
+      const one = await updateStudentCell(tx, viewer, { ...row, field: parsed.data.field, value: parsed.data.value });
+      if (one.ok) result.updated.push({ studentId: row.studentId, version: one.data.version });
+      else result.skipped.push({ studentId: row.studentId, reason: one.error });
+    }
+  });
+  return { ok: true, data: result };
 }

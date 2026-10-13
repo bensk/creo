@@ -12,6 +12,7 @@ import {
   CompactSelection,
 } from "@glideapps/glide-data-grid";
 import "@glideapps/glide-data-grid/dist/index.css";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { CompiledColumn } from "@/core/query/compile";
@@ -20,7 +21,7 @@ import { OPERATORS_BY_TYPE } from "@/core/query/source";
 import type { Filter, Operator, QuerySpecInput } from "@/core/query/spec";
 import { useShortcut } from "@/core/ui/keyboard/KeyboardProvider";
 import {
-  deleteStudentViewAction, queryStudentsAction, saveStudentViewAction, updateStudentCellAction,
+  bulkUpdateStudentsAction, deleteStudentViewAction, queryStudentsAction, saveStudentViewAction, updateStudentCellAction,
 } from "../grid-actions";
 import { readGridTheme } from "./grid-theme";
 
@@ -32,7 +33,9 @@ export interface SavedView {
   mine: boolean;
 }
 
-const EDITABLE = new Set(["preferredFirstName", "pronouns", "medicalAlert", "mediaConsent"]);
+const BUILT_IN_EDITABLE = new Set(["preferredFirstName", "pronouns", "medicalAlert", "mediaConsent"]);
+// Built-in editable fields and every custom field; the server decides per student.
+const isEditable = (key: string) => BUILT_IN_EDITABLE.has(key) || key.startsWith("custom.");
 const OP_LABEL: Record<Operator, string> = {
   eq: "is", neq: "is not", in: "is any of", not_in: "is none of", contains: "contains", starts_with: "starts with",
   gt: ">", gte: "≥", lt: "<", lte: "≤", between: "between", is_empty: "is empty", is_not_empty: "is not empty",
@@ -63,12 +66,14 @@ export function StudentGrid({
   initialResult,
   initialViews,
   userCanEdit,
+  canManageFields,
 }: {
   fields: CompiledColumn[];
   initialSpec: QuerySpecInput & { columns: string[] };
   initialResult: QueryResult;
   initialViews: SavedView[];
   userCanEdit: boolean;
+  canManageFields: boolean;
 }) {
   const router = useRouter();
   const [spec, setSpec] = useState(initialSpec);
@@ -76,7 +81,7 @@ export function StudentGrid({
   const [views, setViews] = useState(initialViews);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [panel, setPanel] = useState<"filter" | "columns" | "views" | null>(null);
+  const [panel, setPanel] = useState<"filter" | "columns" | "views" | "bulk" | null>(null);
   const [loading, startLoading] = useTransition();
   const [theme, setTheme] = useState<Partial<Theme>>({});
   const [selection, setSelection] = useState<GridSelection>({ columns: CompactSelection.empty(), rows: CompactSelection.empty() });
@@ -137,8 +142,9 @@ export function StudentGrid({
       if ((column.type === "number" || column.type === "percent") && value !== null && value !== undefined) {
         return { kind: GridCellKind.Number, data: Number(value), displayData: text, allowOverlay: false, readonly: true, contentAlign: "right" };
       }
-      const editable = userCanEdit && EDITABLE.has(column.key);
-      return { kind: GridCellKind.Text, data: value === null || value === undefined ? "" : String(value), displayData: text, allowOverlay: editable, readonly: !editable };
+      const editable = userCanEdit && isEditable(column.key);
+      const data = value === null || value === undefined ? "" : column.type === "boolean" || column.type === "text_list" ? text : String(value);
+      return { kind: GridCellKind.Text, data, displayData: text, allowOverlay: editable, readonly: !editable };
     },
     [columns, result.rows, userCanEdit],
   );
@@ -155,7 +161,7 @@ export function StudentGrid({
       const saved = await updateStudentCellAction({ studentId: target.id, version: target.version, field: column.key as never, value: nextValue });
       if (saved.ok) {
         setResult((r) => ({ ...r, rows: r.rows.map((x, i) => (i === row ? { ...x, version: saved.data.version } : x)) }));
-        setNotice(`Saved ${column.label.toLowerCase()}.`);
+        setNotice(`Saved “${column.label}”.`);
         setError(null);
       } else {
         setResult((r) => ({ ...r, rows: r.rows.map((x, i) => (i === row ? { ...x, values: { ...x.values, [column.key]: previous } } : x)) }));
@@ -171,6 +177,7 @@ export function StudentGrid({
   };
 
   const selectedRow = selection.current?.cell[1] ?? -1;
+  const checkedRows = selection.rows.toArray();
   const moveRow = (delta: number) => {
     const row = Math.max(0, Math.min(result.rows.length - 1, selectedRow + delta));
     setSelection({ columns: CompactSelection.empty(), rows: CompactSelection.empty(), current: { cell: [0, row], range: { x: 0, y: row, width: 1, height: 1 }, rangeStack: [] } });
@@ -208,6 +215,14 @@ export function StudentGrid({
         <ToolbarButton active={panel === "filter"} onClick={() => setPanel(panel === "filter" ? null : "filter")} hint="f">Filter</ToolbarButton>
         <ToolbarButton active={panel === "columns"} onClick={() => setPanel(panel === "columns" ? null : "columns")} hint="c">Columns</ToolbarButton>
         <ToolbarButton active={panel === "views"} onClick={() => setPanel(panel === "views" ? null : "views")}>Views</ToolbarButton>
+        {userCanEdit && checkedRows.length > 0 && (
+          <ToolbarButton active={panel === "bulk"} onClick={() => setPanel(panel === "bulk" ? null : "bulk")}>
+            Edit {checkedRows.length} selected
+          </ToolbarButton>
+        )}
+        {canManageFields && (
+          <Link href="/students/fields" className="flex h-9 items-center rounded-md px-2 text-sm text-link hover:underline">Fields</Link>
+        )}
         <span className="voice ml-auto text-xs text-ink-muted" aria-live="polite">
           {loading ? "loading…" : `${result.rows.length} ${result.rows.length === 1 ? "student" : "students"}`}
         </span>
@@ -254,8 +269,31 @@ export function StudentGrid({
             }}
           />
         )}
+        {panel === "bulk" && checkedRows.length > 0 && (
+          <BulkPanel
+            fields={fields.filter((f) => isEditable(f.key))}
+            count={checkedRows.length}
+            onClose={() => setPanel(null)}
+            onApply={async (fieldKey, value) => {
+              const rows = checkedRows.map((i) => result.rows[i]).filter((r): r is NonNullable<typeof r> => !!r && r.version !== null);
+              const saved = await bulkUpdateStudentsAction({ field: fieldKey, value, rows: rows.map((r) => ({ studentId: r.id, version: r.version! })) });
+              if (!saved.ok) return setError(saved.error);
+              const label = fields.find((f) => f.key === fieldKey)?.label ?? fieldKey;
+              const reasons = [...new Set(saved.data.skipped.map((x) => x.reason))];
+              if (saved.data.skipped.length > 0) setError(`Saved ${saved.data.updated.length}. Skipped ${saved.data.skipped.length}: ${reasons.join(" ")}`);
+              else setError(null);
+              setNotice(`Saved “${label}” for ${saved.data.updated.length} ${saved.data.updated.length === 1 ? "student" : "students"}.`);
+              setPanel(null);
+              setSelection({ columns: CompactSelection.empty(), rows: CompactSelection.empty() });
+              // Reload so values and versions are exactly what the server has.
+              const next = await queryStudentsAction(spec);
+              if (next.ok) setResult(next.data);
+            }}
+          />
+        )}
         {error && <p role="alert" className="rounded-md border-2 border-crimson bg-surface-raised px-3 py-2 text-sm">{error}</p>}
-        {notice && !error && <p role="status" className="voice text-xs text-ink-muted">{notice.toLowerCase()}</p>}
+        {/* Plain text: notices can quote names staff wrote (views, fields), which never use the system voice. */}
+        {notice && !error && <p role="status" className="text-xs text-ink-muted">{notice}</p>}
         {columns.some((c) => c.partial) && (
           <p className="voice text-xs text-ink-muted">* shown only for students you work with.</p>
         )}
@@ -273,7 +311,9 @@ export function StudentGrid({
           }}
           gridSelection={selection}
           onGridSelectionChange={setSelection}
-          rowMarkers="number"
+          rowMarkers={userCanEdit ? { kind: "checkbox-visible", checkboxStyle: "square" } : "number"}
+          rowSelect="multi"
+          rowSelectionMode="multi"
           smoothScrollX
           smoothScrollY
           width="100%"
@@ -433,5 +473,60 @@ function ViewPanel({
         <button type="submit" className="h-9 w-fit rounded-md bg-ink-title px-4 text-sm font-semibold text-surface">Save view</button>
       </form>
     </div>
+  );
+}
+
+function BulkPanel({
+  fields, count, onApply, onClose,
+}: {
+  fields: CompiledColumn[];
+  count: number;
+  onApply: (field: string, value: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [fieldKey, setFieldKey] = useState(fields[0]?.key ?? "");
+  const [value, setValue] = useState("");
+  const [saving, setSaving] = useState(false);
+  const field = fields.find((f) => f.key === fieldKey);
+  return (
+    <form
+      className="flex flex-wrap items-end gap-2 rounded-lg border border-line-soft bg-surface-raised p-3"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setSaving(true);
+        await onApply(fieldKey, value);
+        setSaving(false);
+      }}
+      onKeyDown={(e) => e.key === "Escape" && onClose()}
+    >
+      <span className="voice self-center text-sm text-ink-muted">set for {count} {count === 1 ? "student" : "students"}:</span>
+      <label className="grid gap-1 text-xs">
+        <span className="voice text-ink-muted">field</span>
+        <select autoFocus value={fieldKey} onChange={(e) => { setFieldKey(e.target.value); setValue(""); }} className="h-9 rounded-md border border-line bg-surface px-2 text-sm">
+          {fields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+        </select>
+      </label>
+      <label className="grid gap-1 text-xs">
+        <span className="voice text-ink-muted">{field?.type === "text_list" ? "values, separated by commas" : "new value (empty clears it)"}</span>
+        {field?.type === "enum" && field.options ? (
+          <select value={value} onChange={(e) => setValue(e.target.value)} className="h-9 rounded-md border border-line bg-surface px-2 text-sm">
+            <option value="">(clear)</option>
+            {field.options.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        ) : field?.type === "boolean" ? (
+          <select value={value} onChange={(e) => setValue(e.target.value)} className="h-9 rounded-md border border-line bg-surface px-2 text-sm">
+            <option value="">(clear)</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        ) : (
+          <input value={value} onChange={(e) => setValue(e.target.value)} type={field?.type === "date" ? "date" : "text"} className="h-9 w-56 rounded-md border border-line bg-surface px-2 text-sm" />
+        )}
+      </label>
+      <button type="submit" disabled={saving} className="h-9 rounded-md bg-ink-title px-4 text-sm font-semibold text-surface disabled:opacity-60">
+        {saving ? "Saving…" : `Apply to ${count}`}
+      </button>
+      <button type="button" onClick={onClose} className="voice h-9 px-2 text-xs text-ink-muted">esc to close</button>
+    </form>
   );
 }

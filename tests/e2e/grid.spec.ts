@@ -64,7 +64,7 @@ test("saves a view and applies it later", async ({ page }) => {
   await page.getByRole("button", { name: "Views" }).click();
   await page.getByLabel("save current view as").fill(name);
   await page.getByRole("button", { name: "Save view" }).click();
-  await expect(page.getByText(`saved view “${name.toLowerCase()}”.`)).toBeVisible();
+  await expect(page.getByText(`Saved view “${name}”.`)).toBeVisible();
 
   await page.reload();
   await expect(count(page)).toHaveText("397 students");
@@ -96,7 +96,7 @@ async function editCamiPronouns(page: Page, value: string) {
   await expect(editor).toBeVisible();
   await editor.fill(value);
   await page.keyboard.press("Enter");
-  await expect(page.getByText("saved pronouns.")).toBeVisible();
+  await expect(page.getByText("Saved “Pronouns”.")).toBeVisible();
 }
 
 test("a homeroom teacher edits a pronoun from the keyboard, and it saves", async ({ page }) => {

@@ -14,14 +14,15 @@ import { querySpecSchema, type QuerySpecInput } from "./spec";
 
 export { QueryError } from "./compile";
 
-/** A source and every field any module adds to it. */
-export function sourceWithFields(id: string): { source: SourceDef; fields: FieldDef[] } {
+/** A source and every field any module adds to it (plus its data-defined fields, when a db is given). */
+export async function sourceWithFields(id: string, load?: { db: Db; ctx: FieldContext }): Promise<{ source: SourceDef; fields: FieldDef[] }> {
   const source = registry.modules.flatMap((m) => m.sources ?? []).find((s) => s.id === id);
   if (!source) throw new QueryError(`Unknown source "${id}"`);
   const fields = registry.modules.flatMap((m) => m.sourceFields?.[id] ?? []);
+  if (load && source.dynamicFields) fields.push(...(await source.dynamicFields(load.db, load.ctx)));
   const seen = new Set<string>();
   for (const f of fields) {
-    if (seen.has(f.key)) throw new Error(`Two modules define field "${f.key}" on source "${id}"`);
+    if (seen.has(f.key)) throw new Error(`Two fields are named "${f.key}" on source "${id}"`);
     seen.add(f.key);
   }
   return { source, fields };
@@ -52,8 +53,8 @@ export async function fieldContext(db: Db, schoolId: string): Promise<FieldConte
 }
 
 /** Every field of a source this viewer can see at all (for column pickers and filter menus). */
-export function describeSource(viewer: Viewer, sourceId: string): CompiledColumn[] {
-  const { source, fields } = sourceWithFields(sourceId);
+export async function describeSource(db: Db, viewer: Viewer, sourceId: string): Promise<CompiledColumn[]> {
+  const { source, fields } = await sourceWithFields(sourceId, { db, ctx: await fieldContext(db, viewer.schoolId) });
   const access = queryAccess(viewer);
   return fields.flatMap((f): CompiledColumn[] => {
     if (access.everyRow.has(f.sensitivity)) return [{ key: f.key, label: f.label, type: f.type, sensitivity: f.sensitivity, group: f.group, options: f.options, partial: false }];
@@ -62,8 +63,8 @@ export function describeSource(viewer: Viewer, sourceId: string): CompiledColumn
   });
 }
 
-export function defaultColumns(sourceId: string): string[] {
-  return sourceWithFields(sourceId).fields.filter((f) => f.defaultVisible).map((f) => f.key);
+export async function defaultColumns(sourceId: string): Promise<string[]> {
+  return (await sourceWithFields(sourceId)).fields.filter((f) => f.defaultVisible).map((f) => f.key);
 }
 
 export interface QueryResult {
@@ -79,10 +80,10 @@ export async function runQuery(db: Db, viewer: Viewer, input: QuerySpecInput, ct
   const parsed = querySpecSchema.safeParse(input);
   if (!parsed.success) throw new QueryError("That query isn't valid");
   const spec = parsed.data;
-  const { source, fields } = sourceWithFields(spec.source);
+  const ctx = { ...(await fieldContext(db, viewer.schoolId)), ...ctxOverride };
+  const { source, fields } = await sourceWithFields(spec.source, { db, ctx });
   await authorize(db, viewer, source.permission);
 
-  const ctx = { ...(await fieldContext(db, viewer.schoolId)), ...ctxOverride };
   const compiled = compileQuery(spec, source, fields, queryAccess(viewer), ctx);
   const raw = await db.execute<Record<string, unknown>>(compiled.sql);
   const rows = [...raw].map((r) => ({
