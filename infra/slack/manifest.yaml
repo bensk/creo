@@ -1,0 +1,43 @@
+# Slack app manifest for the Creo SIS. Create the app at https://api.slack.com/apps
+# → Create New App → From an app manifest, paste this, and replace
+# sis.creoprep.org with the app's real host. See docs/setup/slack.md.
+display_information:
+  name: Creo SIS
+  description: Look up students and get SIS notifications.
+  background_color: "#1f2a44"
+features:
+  bot_user:
+    display_name: Creo SIS
+    always_online: false
+  slash_commands:
+    - command: /student
+      url: https://sis.creoprep.org/api/slack/commands
+      description: Look up a student (only you see the answer)
+      usage_hint: "[name]"
+      should_escape: false
+  unfurl_domains:
+    - sis.creoprep.org
+oauth_config:
+  scopes:
+    bot:
+      - commands
+      - chat:write
+      - im:write
+      - users:read
+      - users:read.email
+      - links:read
+      - links:write
+      - channels:read
+      - groups:read
+settings:
+  event_subscriptions:
+    request_url: https://sis.creoprep.org/api/slack/events
+    bot_events:
+      - link_shared
+  interactivity:
+    is_enabled: true
+    request_url: https://sis.creoprep.org/api/slack/interactions
+    message_menu_options_url: https://sis.creoprep.org/api/slack/options
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

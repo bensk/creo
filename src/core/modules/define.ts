@@ -29,6 +29,13 @@ export interface CommandDef {
   permission?: string;
 }
 
+export interface NotificationTypeDef {
+  /** Must start with "<module id>." e.g. "attendance.chronic_absence". */
+  type: string;
+  label: string;
+  description: string;
+}
+
 export interface ModuleManifest {
   id: string;
   /** Drizzle tables owned by this module. */
@@ -45,6 +52,8 @@ export interface ModuleManifest {
   sourceFields?: Readonly<Record<string, readonly FieldDef[]>>;
   nav?: readonly NavItem[];
   commands?: readonly CommandDef[];
+  /** Slack notification types. Where each goes lives in slack_rules (data), not here. */
+  notifications?: readonly NotificationTypeDef[];
 }
 
 const MODULE_ID = /^[a-z][a-z0-9-]*$/;
@@ -58,6 +67,11 @@ export function defineModule<const M extends ModuleManifest>(manifest: M): M {
       throw new Error(
         `Permission "${permission.key}" in module "${manifest.id}" must start with "${manifest.id}."`,
       );
+    }
+  }
+  for (const n of manifest.notifications ?? []) {
+    if (!n.type.startsWith(`${manifest.id}.`)) {
+      throw new Error(`Notification "${n.type}" in module "${manifest.id}" must start with "${manifest.id}."`);
     }
   }
   return manifest;

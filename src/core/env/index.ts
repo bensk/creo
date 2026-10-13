@@ -24,6 +24,12 @@ const serverEnvSchema = z
     // Cloud Storage bucket for files (pronunciation audio, photos, slips). Without
     // it, development and tests keep files under data/files; production refuses.
     FILES_BUCKET: z.string().min(1).optional(),
+    // Slack. Without the signing secret and bot token the Slack endpoints answer
+    // 404 and the Slack settings page says it isn't connected.
+    SLACK_SIGNING_SECRET: z.string().min(1).optional(),
+    SLACK_BOT_TOKEN: z.string().startsWith("xoxb-").optional(),
+    // Only requests from this workspace are accepted.
+    SLACK_TEAM_ID: z.string().regex(/^T[A-Z0-9]+$/).optional(),
   })
   .refine((env) => !(env.NODE_ENV === "production" && env.DEV_SIGN_IN !== undefined), {
     // Any value at all in production is a misconfiguration: refuse to start.

@@ -73,3 +73,9 @@ variable "notion_bdt_data_source_id" {
   type        = string
   default     = ""
 }
+
+variable "slack_team_id" {
+  description = "Slack workspace ID (starts with T). Empty until the Slack app is installed; the Slack endpoints then answer 404. Add the signing secret and bot token to Secret Manager before setting this."
+  type        = string
+  default     = ""
+}

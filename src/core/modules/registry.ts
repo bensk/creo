@@ -1,4 +1,4 @@
-import type { CommandDef, ModuleManifest, NavItem, PermissionDef } from "./define";
+import type { CommandDef, ModuleManifest, NavItem, NotificationTypeDef, PermissionDef } from "./define";
 
 export interface ModuleRegistry {
   modules: readonly ModuleManifest[];
@@ -6,6 +6,7 @@ export interface ModuleRegistry {
   permissions: readonly PermissionDef[];
   nav: readonly NavItem[];
   commands: readonly CommandDef[];
+  notifications: readonly NotificationTypeDef[];
 }
 
 function assertUnique(kind: string, values: readonly string[]): void {
@@ -22,11 +23,13 @@ export function createRegistry(modules: readonly ModuleManifest[]): ModuleRegist
   const permissions = modules.flatMap((m) => m.permissions ?? []);
   const nav = modules.flatMap((m) => m.nav ?? []);
   const commands = modules.flatMap((m) => m.commands ?? []);
+  const notifications = modules.flatMap((m) => m.notifications ?? []);
 
   assertUnique("module id", modules.map((m) => m.id));
   assertUnique("permission", permissions.map((p) => p.key));
   assertUnique("nav item", nav.map((n) => n.id));
   assertUnique("command", commands.map((c) => c.id));
+  assertUnique("notification type", notifications.map((n) => n.type));
   assertUnique("shortcut", commands.flatMap((c) => (c.shortcut ? [c.shortcut] : [])));
 
   const known = new Set(permissions.map((p) => p.key));
@@ -43,5 +46,6 @@ export function createRegistry(modules: readonly ModuleManifest[]): ModuleRegist
     permissions,
     nav,
     commands,
+    notifications,
   };
 }

@@ -47,6 +47,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<StaffRole, Readonly<Record<string
     "students.manage_fields": "all", // PROPOSED
     "integrations.run_imports": "all", // PROPOSED
     "slack.manage": "all",
+    // CLAUDE.md: student names go only to private channels an admin has allowlisted.
+    "slack.allow_names": "all",
     "students.view": "all",
     "students.edit_identity": "all", // PROPOSED
     "students.manage_enrollment": "all", // PROPOSED

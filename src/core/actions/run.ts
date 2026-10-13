@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { recordAudit, type AuditEntry } from "../audit/record";
+import { recordAudit, type AuditEntry, type AuditVia } from "../audit/record";
 import type { StaffViewer } from "../auth/viewer";
 import type { Db } from "../db/types";
 import { authorize } from "../permissions";
@@ -54,6 +54,8 @@ export async function runStaffAction<S extends z.ZodType, O>(
   options: StaffActionOptions<S>,
   handler: (ctx: ActionContext<z.infer<S>>) => Promise<O>,
   rawInput: unknown,
+  /** Where the action came from; Slack passes "slack". */
+  via: AuditVia = "app",
 ): Promise<O> {
   const parsed = options.input.safeParse(rawInput);
   if (!parsed.success) throw new InvalidInput(parsed.error.issues);
@@ -65,7 +67,7 @@ export async function runStaffAction<S extends z.ZodType, O>(
     let audited = 0;
     const audit = async (entry: AuditInput) => {
       audited++;
-      await recordAudit(tx, { ...entry, schoolId: viewer.schoolId, actorUserId: viewer.userId, via: "app" });
+      await recordAudit(tx, { ...entry, schoolId: viewer.schoolId, actorUserId: viewer.userId, via });
     };
     const result = await handler({ viewer, tx, input, audit });
     if (!options.readOnly && audited === 0) throw new UnauditedWrite(options.permission);

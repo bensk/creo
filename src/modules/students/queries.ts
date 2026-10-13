@@ -165,3 +165,12 @@ export async function demographicsForStudent(db: Db, studentId: string) {
   const [row] = await db.select().from(studentDemographics).where(eq(studentDemographics.studentId, studentId));
   return row ?? null;
 }
+
+/** How many students are currently enrolled (for counts-only summaries such as Slack link previews). */
+export async function countEnrolled(db: Db, schoolId: string): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(distinct ${enrollments.studentId})::int` })
+    .from(enrollments)
+    .where(and(eq(enrollments.schoolId, schoolId), eq(enrollments.status, "active"), sql`${enrollments.exitDate} is null`));
+  return row?.n ?? 0;
+}

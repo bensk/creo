@@ -27,6 +27,7 @@ export const DESTINATIONS: readonly Destination[] = [
   { slug: "dashboards", label: "Dashboards", href: "/dashboards", goKey: "d", arrivesIn: "Phase 6", summary: "Live dashboards built from the same data." },
   { slug: "lists", label: "Lists", href: "/lists", goKey: "l", arrivesIn: "Phase 2", summary: "Saved and live lists of students." },
   { slug: "change-log", label: "Change log", href: "/change-log", permission: "core.audit.read", summary: "Every change, who made it, and when." },
+  { slug: "slack", label: "Slack", href: "/slack", permission: "slack.manage", summary: "Where Slack notifications go, and at what detail." },
   { slug: "settings", label: "Settings", href: "/settings", permission: "core.roles.manage", arrivesIn: "Phase 0, step 13", summary: "Roles and the Google Group to role mapping." },
 ];
 
