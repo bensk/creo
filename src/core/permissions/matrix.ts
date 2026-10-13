@@ -29,6 +29,7 @@ export type PermissionScope = "all" | "homeroom";
 /** Role → permission key → scope. A key missing for a role is denied. */
 export const ROLE_PERMISSIONS: Readonly<Record<StaffRole, Readonly<Record<string, PermissionScope>>>> = {
   leader: {
+    "students.edit_alerts": "all", // PROPOSED
     "students.edit_supports": "all", // PROPOSED
     "students.manage_fields": "all", // PROPOSED
     "slack.manage": "all",
@@ -42,6 +43,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<StaffRole, Readonly<Record<string
     "core.visibility.manage": "all",
   },
   admin: {
+    "students.edit_alerts": "all", // PROPOSED
     "students.manage_fields": "all", // PROPOSED
     "integrations.run_imports": "all", // PROPOSED
     "slack.manage": "all",
@@ -56,6 +58,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<StaffRole, Readonly<Record<string
     "core.visibility.manage": "all",
   },
   ops: {
+    "students.edit_alerts": "all", // PROPOSED
     "integrations.run_imports": "all", // PROPOSED
     "students.view": "all",
     "students.edit_identity": "all", // PROPOSED
@@ -65,6 +68,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<StaffRole, Readonly<Record<string
     "cohorts.manage": "all", // PROPOSED
   },
   support: {
+    "students.edit_alerts": "all", // PROPOSED
     "students.edit_supports": "all", // PROPOSED
     "students.view": "all",
     "students.edit_identity": "all", // PROPOSED

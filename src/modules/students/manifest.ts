@@ -1,9 +1,12 @@
 import { defineModule } from "@/core/modules/define";
+import { studentFields, studentsSource } from "./source";
 import * as schema from "./schema";
 
 export const manifest = defineModule({
   id: "students",
   schema,
+  sources: [studentsSource],
+  sourceFields: { students: studentFields },
   permissions: [
     { key: "students.view", description: "Look up any student and their standard information" },
     { key: "students.edit_identity", description: "Edit preferred name, pronouns, and pronunciation" },
@@ -11,6 +14,7 @@ export const manifest = defineModule({
     { key: "students.edit_contacts", description: "Edit family contacts and portal access" },
     { key: "students.edit_supports", description: "Add and edit IEP, 504, ELL, and other supports" },
     { key: "students.manage_fields", description: "Add, change, and archive custom fields" },
+    { key: "students.edit_alerts", description: "Edit a student's medical alert and photo consent" },
   ],
   // Access matrix draft 1 (docs/PLAN.md decisions 12 and 20). Contact details are standard.
   fieldSensitivity: {

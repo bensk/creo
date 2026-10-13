@@ -278,7 +278,7 @@ Each phase ends with a short demo to leadership and a written check against exit
 - [ ] Slack app: install, signing-secret verification, user linking by email, `/student` lookup, link unfurls, `slack_rules` admin screen
 - [x] Students, enrollments, contacts, supports schema (plus pronunciations, custom field definitions, saved views, import runs, external IDs, Slack tables, and basic attendance and behavior tables)
 - [ ] Importers: Big Data Tracker, Schoolrunner students/contacts/attendance/behavior history — Big Data Tracker (Notion) importer done and tested (ADR 0003), runs once the Notion token is stored; Schoolrunner waits for an API key
-- [ ] Student database grid (Glide): sort, filter (query spec), column picker, saved views, inline edit with audit, bulk edit
+- [ ] Student database grid (Glide): sort, filter (query spec), column picker, saved views, inline edit with audit, bulk edit — done except bulk edit (ADR 0004); query engine v1 in `core/query`
 - [ ] Student profile: header, groups, contacts, supports (restricted), timeline of attendance/behavior/comm — header, groups (with history), contacts, enrollment history, and restricted identifiers done; supports wait on the Phase 1 schema; the timeline fills in as attendance, behavior, and communication ship
 - [ ] Custom fields on students (admin UI)
 - [ ] Name pronunciation: phonetic spelling and staff-recorded audio on the profile; `<StudentName>` component with play button used in rosters, profile header, and `⌘K` results — phonetic spelling shown through `<StudentName>` in the profile header and ⌘K; recording audio comes with file storage

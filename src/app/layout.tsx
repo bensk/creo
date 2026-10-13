@@ -21,6 +21,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     >
       <body>
         <NextIntlClientProvider>{children}</NextIntlClientProvider>
+        {/* Overlay editors from the data grid render here. */}
+        <div id="portal" className="fixed left-0 top-0 z-[60]" />
       </body>
     </html>
   );
