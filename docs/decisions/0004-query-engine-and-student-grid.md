@@ -17,6 +17,7 @@ Status: accepted
 
 - **Glide Data Grid 6.0.4-alpha24**, pinned exactly. It is the only Glide release that supports React 19 (the latest stable, 6.0.3, stops at React 18). CLAUDE.md chose Glide for 1,000 × 60 grids at 60 fps; if the prerelease causes problems, the fallback is TanStack Table with a virtualizer.
 - Do **not** pass a partial `keybindings` prop: this release treats it as the full set and turns off arrow-key navigation.
+- Row selection for bulk edit uses `rowMarkers={{ kind: "checkbox-visible" }}` with `rowSelectionMode="multi"`: each checkbox click adds to the selection without a modifier key. With `"both"`, rows are only selectable on hover with a modifier, which staff wouldn't discover.
 - The grid draws on a canvas, so it loads client-side only; overlay editors render into `#portal` in the root layout. Colors are read from the Creo CSS variables and follow light/dark changes.
 - Editable cells (preferred first name, pronouns, medical alert, photo consent) commit optimistically, reconcile with the server, and use the student's `version` column: a stale edit is refused with "Someone else changed this student", never written over. Each edit is audited.
 - New permission `students.edit_alerts` (ops, support, leader, admin; PROPOSED until the access matrix is signed off) for the medical alert and photo consent.

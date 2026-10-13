@@ -1,4 +1,5 @@
 import type { SQL } from "drizzle-orm";
+import type { Db } from "../db/types";
 import type { Sensitivity } from "../permissions/sensitivity";
 import type { Operator } from "./spec";
 
@@ -14,6 +15,8 @@ export interface FieldContext {
 
 export interface FieldDef {
   key: string;
+  /** Set for custom fields: the definition's key inside the row's custom data. */
+  customKey?: string;
   label: string;
   type: FieldType;
   sensitivity: Sensitivity;
@@ -45,6 +48,8 @@ export interface SourceDef {
   /** SQL true when the row is one the viewer works with (for "assigned only" sensitivity), given their staff id. */
   assigned?: (staffId: string, ctx: FieldContext) => SQL;
   defaultSort: readonly { field: string; dir: "asc" | "desc" }[];
+  /** Fields defined as data (custom fields), loaded per query. */
+  dynamicFields?: (db: Db, ctx: FieldContext) => Promise<FieldDef[]>;
 }
 
 export const OPERATORS_BY_TYPE: Readonly<Record<FieldType, readonly Operator[]>> = {

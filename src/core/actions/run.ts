@@ -30,6 +30,13 @@ export class InvalidInput extends Error {
   }
 }
 
+/**
+ * An action declining to do something (a duplicate name, a stale version).
+ * Throw it from a handler instead of returning: nothing was written, so no
+ * audit entry is expected, and the caller shows the message as is.
+ */
+export class Refused extends Error {}
+
 export class UnauditedWrite extends Error {
   constructor(permission: string) {
     super(`Action "${permission}" finished without an audit entry; its changes were rolled back`);

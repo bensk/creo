@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
-import type { FieldDef, SourceDef } from "@/core/query/source";
+import type { FieldDef, FieldType, SourceDef } from "@/core/query/source";
+import { listCustomFields, type CustomFieldDef } from "./custom-field-defs";
 
 // The "students" query source: one row per student enrolled this school year
 // (withdrawn students included, with their status). Other modules add fields
@@ -34,7 +35,30 @@ export const studentsSource: SourceDef = {
   )`,
   searchFields: ["name", "legalFirstName", "legalLastName"],
   defaultSort: [{ field: "name", dir: "asc" }],
+  dynamicFields: async (db, ctx) => (await listCustomFields(db, ctx.schoolId)).map(customFieldToField),
 };
+
+const CUSTOM_TYPE: Record<CustomFieldDef["type"], FieldType> = {
+  text: "text", long_text: "text", number: "number", date: "date", boolean: "boolean", select: "enum", multi_select: "text_list",
+};
+
+/** A custom field as a query field: read from the student's custom data, typed, with its own sensitivity. */
+export function customFieldToField(def: CustomFieldDef): FieldDef {
+  const k = def.key;
+  const select = {
+    text: () => sql`(${s("custom")} ->> ${k})`,
+    long_text: () => sql`(${s("custom")} ->> ${k})`,
+    select: () => sql`(${s("custom")} ->> ${k})`,
+    number: () => sql`(${s("custom")} ->> ${k})::numeric`,
+    date: () => sql`(${s("custom")} ->> ${k})::date`,
+    boolean: () => sql`(${s("custom")} ->> ${k})::boolean`,
+    multi_select: () => sql`array(select jsonb_array_elements_text(coalesce(${s("custom")} -> ${k}, '[]'::jsonb)))`,
+  }[def.type];
+  return {
+    key: `custom.${k}`, customKey: k, label: def.label, type: CUSTOM_TYPE[def.type], sensitivity: def.sensitivity,
+    group: "Custom fields", select, options: def.type === "select" ? def.options : undefined,
+  };
+}
 
 const currentSupport = (type: string) => (ctx: { today: string }) =>
   sql`exists (select 1 from student_supports ss where ss.student_id = s.id and ss.type = ${type}
