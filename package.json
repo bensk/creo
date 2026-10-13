@@ -33,6 +33,8 @@
     "@fontsource/maple-mono": "5.3.0",
     "@glideapps/glide-data-grid": "6.0.4-alpha24",
     "@google-cloud/storage": "8.2.0",
+    "@slack/bolt": "5.1.0",
+    "@slack/web-api": "8.2.0",
     "cmdk": "1.1.1",
     "drizzle-orm": "~0.45.3",
     "google-auth-library": "11.1.0",

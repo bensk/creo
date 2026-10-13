@@ -20,12 +20,13 @@ resource "google_service_account" "directory" {
 }
 
 locals {
-  app_secrets  = ["database-url-app", "google-client-secret", "anthropic-api-key"]
+  app_secrets  = ["database-url-app", "google-client-secret", "anthropic-api-key", "slack-signing-secret", "slack-bot-token"]
   jobs_secrets = ["database-url-app", "database-url-migrate", "directory-credentials", "notion-token"]
   # Real student data is imported into production only; staging holds synthetic data.
   bdt_import_enabled     = var.notion_bdt_data_source_id != "" && local.is_production
   google_sign_in_enabled = var.google_client_id != ""
   directory_enabled      = var.directory_admin_email != ""
+  slack_enabled          = var.slack_team_id != ""
 }
 
 resource "google_secret_manager_secret_iam_member" "app" {
@@ -102,6 +103,25 @@ resource "google_cloud_run_v2_service" "app" {
           secret_key_ref {
             secret  = google_secret_manager_secret.secrets["database-url-app"].secret_id
             version = "latest"
+          }
+        }
+      }
+      dynamic "env" {
+        for_each = local.slack_enabled ? [1] : []
+        content {
+          name  = "SLACK_TEAM_ID"
+          value = var.slack_team_id
+        }
+      }
+      dynamic "env" {
+        for_each = local.slack_enabled ? { SLACK_SIGNING_SECRET = "slack-signing-secret", SLACK_BOT_TOKEN = "slack-bot-token" } : {}
+        content {
+          name = env.key
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.secrets[env.value].secret_id
+              version = "latest"
+            }
           }
         }
       }

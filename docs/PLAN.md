@@ -275,7 +275,7 @@ Each phase ends with a short demo to leadership and a written check against exit
 - Exit: a staff member signs in, sees their role-appropriate shell, and every shortcut in CLAUDE.md works.
 
 ### Phase 1 — Students, contacts, the grid
-- [ ] Slack app: install, signing-secret verification, user linking by email, `/student` lookup, link unfurls, `slack_rules` admin screen
+- [x] Slack app: signing-secret and workspace verification, user linking by confirmed email, `/student` lookup (ephemeral, audited), link unfurls (type and title only), `slack_rules` and channel approval on the Slack page (admin, leader; names in a channel need an admin), `notify.ts` with the privacy rules and `slack_messages` logging, app manifest and setup guide (ADR 0006, `docs/setup/slack.md`). Installing it in the Creo workspace waits for hosting
 - [x] Students, enrollments, contacts, supports schema (plus pronunciations, custom field definitions, saved views, import runs, external IDs, Slack tables, and basic attendance and behavior tables)
 - [ ] Importers: Big Data Tracker, Schoolrunner students/contacts/attendance/behavior history — Big Data Tracker (Notion) importer done and tested (ADR 0003), runs once the Notion token is stored; Schoolrunner waits for an API key
 - [x] Student database grid (Glide): sort, filter (query spec), column picker, saved views, inline edit with audit, bulk edit (tick rows, set one field for all of them in one transaction; rows the editor can't change are skipped and named) (ADR 0004); query engine v1 in `core/query`

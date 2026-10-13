@@ -84,16 +84,18 @@ async function editCamiPronouns(page: Page, value: string) {
   await page.getByRole("button", { name: /^Columns/ }).click();
   await page.getByLabel("Search students").fill("cami mart");
   await expect(count(page)).toHaveText("1 student");
-  await page.waitForTimeout(300); // the canvas redraws just after the count updates
-
   // Name, Pronunciation, Pronouns: click Name in the first row, then move right twice.
-  const box = (await page.getByTestId("student-grid").boundingBox())!;
-  await page.mouse.click(box.x + 120, box.y + 52);
-  await page.keyboard.press("ArrowRight");
-  await page.keyboard.press("ArrowRight");
-  await page.keyboard.press("Enter");
+  // The canvas redraws just after the count updates and exposes no DOM to wait
+  // on, so retry the click until the cell editor opens.
   const editor = page.locator("#portal textarea, #portal input").first();
-  await expect(editor).toBeVisible();
+  await expect(async () => {
+    const box = (await page.getByTestId("student-grid").boundingBox())!;
+    await page.mouse.click(box.x + 120, box.y + 52);
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("Enter");
+    await expect(editor).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 10_000 });
   await editor.fill(value);
   await page.keyboard.press("Enter");
   await expect(page.getByText("Saved “Pronouns”.")).toBeVisible();

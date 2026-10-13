@@ -88,7 +88,6 @@ export default async function StudentProfile({ params }: { params: Promise<{ id:
           <StudentName student={row} phonetic={pronunciation?.phonetic} audioUrl={audioUrl} />
         </h1>
         <PronunciationEditor
-          key={pronunciation?.id ?? "none"}
           studentId={row.id}
           phonetic={pronunciation?.phonetic ?? null}
           audioUrl={audioUrl}
