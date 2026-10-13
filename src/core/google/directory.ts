@@ -12,6 +12,8 @@ export interface DirectoryUser {
   familyName: string;
   orgUnitPath: string;
   suspended: boolean;
+  /** The admin console's "Employee ID" (externalIds type "organization"); schools often store the student ID here. */
+  employeeId?: string | null;
 }
 
 export interface Directory {
@@ -20,6 +22,13 @@ export interface Directory {
   listUsers(): Promise<DirectoryUser[]>;
   /** Email addresses of a group's members, including members of nested groups. */
   listGroupMemberEmails(groupEmail: string): Promise<string[]>;
+}
+
+/** The graduation year in a students sub-OU, e.g. "/Students/Class of 2028" → 2028. */
+export function graduationYearOf(orgUnitPath: string): number | null {
+  if (!isStudentOrgUnit(orgUnitPath)) return null;
+  const m = /(?:^|\D)(20\d{2})(?:\D|$)/.exec(orgUnitPath);
+  return m ? Number(m[1]) : null;
 }
 
 /** Whether an OU path is the students OU or one of its graduation-year sub-OUs. */
@@ -40,6 +49,7 @@ interface ApiUser {
   name?: { givenName?: string; familyName?: string };
   orgUnitPath?: string;
   suspended?: boolean;
+  externalIds?: { type?: string; value?: string }[];
 }
 
 const toUser = (u: ApiUser): DirectoryUser => ({
@@ -49,6 +59,7 @@ const toUser = (u: ApiUser): DirectoryUser => ({
   familyName: u.name?.familyName ?? "",
   orgUnitPath: u.orgUnitPath ?? "/",
   suspended: Boolean(u.suspended),
+  employeeId: u.externalIds?.find((e) => e.type === "organization")?.value?.trim() || null,
 });
 
 /**
