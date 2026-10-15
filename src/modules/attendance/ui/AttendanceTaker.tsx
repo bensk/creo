@@ -22,6 +22,8 @@ export function AttendanceTaker({ groupId, date, codes, students }: { groupId: s
   const firstOpen = Math.max(0, students.findIndex((s) => !s.codeId));
   const [selected, setSelected] = useState(firstOpen);
   const [error, setError] = useState<string | null>(null);
+  // Marks show at once and save in the background; count saves still in flight.
+  const [saving, setSaving] = useState(0);
   const rows = useRef<(HTMLLIElement | null)[]>([]);
   const codeById = useMemo(() => new Map(codes.map((c) => [c.id, c])), [codes]);
   const present = codes.find((c) => c.countsAs === "present");
@@ -32,6 +34,14 @@ export function AttendanceTaker({ groupId, date, codes, students }: { groupId: s
     rows.current[selected]?.scrollIntoView({ block: "nearest" });
   }, [selected]);
 
+  // Leaving while a mark is still saving would lose it: ask first.
+  useEffect(() => {
+    if (!saving) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [saving]);
+
   const save = async (list: { studentId: string; codeId: string }[]) => {
     const before = new Map(marks);
     setMarks((m) => {
@@ -39,7 +49,8 @@ export function AttendanceTaker({ groupId, date, codes, students }: { groupId: s
       for (const x of list) next.set(x.studentId, x.codeId);
       return next;
     });
-    const res = await markAttendanceAction(groupId, date, list);
+    setSaving((n) => n + 1);
+    const res = await markAttendanceAction(groupId, date, list).finally(() => setSaving((n) => n - 1));
     if (!res.ok) {
       setError(res.error);
       setMarks((m) => {
@@ -79,6 +90,7 @@ export function AttendanceTaker({ groupId, date, codes, students }: { groupId: s
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <span className="data text-ink-title" aria-live="polite">{marked} of {students.length} marked</span>
         {marked === students.length && students.length > 0 && <span role="status" className="font-semibold text-ink-title">Done. Thank you.</span>}
+        <span className="voice text-xs text-ink-muted" aria-live="polite">{saving ? "saving…" : marked ? "all saved" : ""}</span>
         <span className="voice ml-auto text-xs text-ink-muted">
           {codes.map((c) => `${keyFor(c)} ${c.label.toLowerCase()}`).join(" · ")} · shift+p rest present · space says the name
         </span>

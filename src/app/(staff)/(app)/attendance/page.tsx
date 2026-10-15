@@ -6,6 +6,7 @@ import { holdsSomewhere } from "@/core/permissions";
 import { fieldContext } from "@/core/query/run";
 import { pronunciationAudioUrl } from "@/core/ui/StudentName";
 import { rosterFor } from "@/modules/students/queries";
+import { dayInfo } from "@/modules/attendance/calendar";
 import { activeCodes, attendanceProgress, homeroomDay, homeroomsFor } from "@/modules/attendance/take";
 import { AttendanceTaker } from "@/modules/attendance/ui/AttendanceTaker";
 
@@ -33,6 +34,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
       );
     }
     // Ops, admins, and leaders start with who has and hasn't taken attendance.
+    const info = await dayInfo(db, viewer.schoolId, day);
     const progress = await attendanceProgress(db, viewer.schoolId, day);
     const missing = progress.filter((p) => p.students > 0 && p.marked < p.students);
     return (
@@ -40,8 +42,13 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
         <header className="flex flex-wrap items-end gap-4">
           <div className="grid gap-1">
             <h1 className="text-3xl font-bold tracking-tight">Attendance</h1>
-            <p className="voice text-sm text-ink-muted">{date.format(new Date(`${day}T00:00:00Z`)).toLowerCase()} · {missing.length ? `${missing.length} homerooms not finished` : "every homeroom is done"}</p>
+            <p className="voice text-sm text-ink-muted">{date.format(new Date(`${day}T00:00:00Z`)).toLowerCase()} · {!info.isSchoolDay ? `not a school day${info.note ? `: ${info.note.toLowerCase()}` : ""}` : missing.length ? `${missing.length} homerooms not finished` : "every homeroom is done"}</p>
           </div>
+          <nav className="flex gap-4 text-sm" aria-label="Attendance tools">
+            <Link className="text-link hover:underline" href="/attendance/late">Late arrivals</Link>
+            <Link className="text-link hover:underline" href="/attendance/calendar">Calendar</Link>
+            <Link className="text-link hover:underline" href="/attendance/codes">Codes</Link>
+          </nav>
           <form className="ml-auto flex items-end gap-2" action="/attendance">
             <label className="grid gap-1 text-sm"><span className="voice text-xs text-ink-muted">day</span>
               <input type="date" name="date" max={today} defaultValue={day} className="h-9 rounded-md border border-line bg-surface px-3 text-sm" /></label>
@@ -67,7 +74,15 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
     );
   }
 
-  const [codes, dayData] = await Promise.all([activeCodes(db, viewer.schoolId), homeroomDay(db, viewer.schoolId, selected.id, day)]);
+  const [codes, dayData, info] = await Promise.all([activeCodes(db, viewer.schoolId), homeroomDay(db, viewer.schoolId, selected.id, day), dayInfo(db, viewer.schoolId, day)]);
+  if (!info.isSchoolDay) {
+    return (
+      <div className="grid max-w-3xl gap-2">
+        <h1 className="text-3xl font-bold tracking-tight">{selected.name}</h1>
+        <p className="voice text-sm text-ink-muted">{date.format(new Date(`${day}T00:00:00Z`)).toLowerCase()} · not a school day{info.note ? `: ${info.note.toLowerCase()}` : ""}.</p>
+      </div>
+    );
+  }
   const roster = (await rosterFor(db, viewer.schoolId, dayData.studentIds))
     .sort((a, b) => `${a.preferredLastName ?? a.legalLastName} ${a.preferredFirstName ?? a.legalFirstName}`.localeCompare(`${b.preferredLastName ?? b.legalLastName} ${b.preferredFirstName ?? b.legalFirstName}`));
 
