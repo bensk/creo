@@ -287,7 +287,7 @@ Each phase ends with a short demo to leadership and a written check against exit
 
 ### Phase 2 — Cohorts, lists, trackers
 - [x] Groups and effective-dated memberships; homeroom/team/section management UI (Groups page, group and class pages, "Your classes" on Home; ops, leaders, and admins create interventions, advisories, clubs, and teams and change their students and staff; homeroom and grade team students come from the imports, so only their staff can be changed by hand)
-- [ ] Static and dynamic lists
+- [x] Static and dynamic lists (Lists page and list pages; "Save as list" in the student grid from the current filters or the ticked rows; sharing with people and Google Groups, limited by sensitivity; ADR 0008)
 - [ ] Query engine v1: sources, metrics, dimensions from students, attendance, behavior
 - [ ] Tracker creation flow: choose population (all / grade / group / list / filter, live or snapshot) → name + columns → share
 - [ ] "Track these students" entry points on group pages, list pages, and filtered grids
@@ -397,6 +397,7 @@ Not planned; add only if needed.
 27. Big Data Tracker IEP column: Received → IEP; 504 → 504 plan; Missing IEP → IEP noted "not yet received from the previous school"; "No IEP – interested in evaluation" is not stored yet. Next imports to propose: photo consent (Social Media), medical alerts and allergies, demographics and address.
 28. Access matrix question 1 decided by Ben (October 9, 2026): a one-line medical alert on each student is standard sensitivity; allergy and other health details stay sensitive. Photo consent is standard. A blank "Social Media" value in the tracker imports as unknown, never as yes. The tracker's "FRP (meals)" column is the meal form's status, so no income data is stored.
 29. Clever roster import (Ben, October 13, 2026; ADR 0007): Schoolrunner's Clever files replace the Schoolrunner API for roster data, uploaded on an Imports page (admin and ops; `integrations.run_imports` confirmed for both). Clever wins over the Big Data Tracker for the fields it carries. Sections, section staff, and section enrollments added now; section teachers count as assigned for sensitive fields. Homerooms come from Clever's homeroom sections. Later the SIS will send these files to Clever.
+30. Phase 2 schema approved (Ben, October 15, 2026): `lists`, `list_members`, `trackers`, `tracker_fields`, `tracker_rows`, `tracker_templates`, one `shares` table for lists, trackers, and dashboards, and `directory_group_members` (Google Group membership read by the Directory sync). Every staff member can make lists and trackers; admins and leaders can see all of them; a share only reaches people whose role sees the item's sensitivity for every student (ADR 0008).
 
 ## Open decisions
 

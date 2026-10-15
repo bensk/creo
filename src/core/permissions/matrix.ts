@@ -29,6 +29,12 @@ export type PermissionScope = "all" | "homeroom";
 /** Role → permission key → scope. A key missing for a role is denied. */
 export const ROLE_PERMISSIONS: Readonly<Record<StaffRole, Readonly<Record<string, PermissionScope>>>> = {
   leader: {
+    // Ben, Oct 15 2026: every staff member may make lists and trackers.
+    "cohorts.create_lists": "all",
+    "trackers.create": "all",
+    // Ben, Oct 15 2026: admins and leaders see every list and tracker.
+    "cohorts.view_all_lists": "all",
+    "trackers.view_all": "all",
     "students.edit_alerts": "all", // PROPOSED
     "students.edit_supports": "all", // PROPOSED
     "students.manage_fields": "all", // PROPOSED
@@ -43,6 +49,12 @@ export const ROLE_PERMISSIONS: Readonly<Record<StaffRole, Readonly<Record<string
     "core.visibility.manage": "all",
   },
   admin: {
+    // Ben, Oct 15 2026: every staff member may make lists and trackers.
+    "cohorts.create_lists": "all",
+    "trackers.create": "all",
+    // Ben, Oct 15 2026: admins and leaders see every list and tracker.
+    "cohorts.view_all_lists": "all",
+    "trackers.view_all": "all",
     "students.edit_alerts": "all", // PROPOSED
     "students.manage_fields": "all", // PROPOSED
     "integrations.run_imports": "all", // confirmed by Ben, Oct 13 2026 (Clever uploads)
@@ -60,6 +72,9 @@ export const ROLE_PERMISSIONS: Readonly<Record<StaffRole, Readonly<Record<string
     "core.visibility.manage": "all",
   },
   ops: {
+    // Ben, Oct 15 2026: every staff member may make lists and trackers.
+    "cohorts.create_lists": "all",
+    "trackers.create": "all",
     "students.edit_alerts": "all", // PROPOSED
     "integrations.run_imports": "all", // confirmed by Ben, Oct 13 2026 (Clever uploads)
     "students.view": "all",
@@ -70,6 +85,9 @@ export const ROLE_PERMISSIONS: Readonly<Record<StaffRole, Readonly<Record<string
     "cohorts.manage": "all", // PROPOSED
   },
   support: {
+    // Ben, Oct 15 2026: every staff member may make lists and trackers.
+    "cohorts.create_lists": "all",
+    "trackers.create": "all",
     "students.edit_alerts": "all", // PROPOSED
     "students.edit_supports": "all", // PROPOSED
     "students.view": "all",
@@ -77,11 +95,17 @@ export const ROLE_PERMISSIONS: Readonly<Record<StaffRole, Readonly<Record<string
     "cohorts.view": "all",
   },
   teacher: {
+    // Ben, Oct 15 2026: every staff member may make lists and trackers.
+    "cohorts.create_lists": "all",
+    "trackers.create": "all",
     "students.view": "all",
     "students.edit_identity": "homeroom", // PROPOSED
     "cohorts.view": "all",
   },
   coach: {
+    // Ben, Oct 15 2026: every staff member may make lists and trackers.
+    "cohorts.create_lists": "all",
+    "trackers.create": "all",
     "students.view": "all",
     "cohorts.view": "all",
   },

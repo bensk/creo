@@ -1,8 +1,9 @@
 import { sql } from "drizzle-orm";
-import { check, date, index, pgTable, smallint, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { check, date, index, jsonb, pgTable, smallint, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { staff } from "../../core/auth/schema";
 import { base } from "../../core/db/base";
 import { citext, sqlList } from "../../core/db/columns";
+import { SENSITIVITY_LEVELS } from "../../core/permissions/sensitivity";
 import { schoolYears } from "../../core/school/schema";
 import { students } from "../students/schema";
 
@@ -179,5 +180,61 @@ export const sectionEnrollments = pgTable(
     index("section_enrollments_school_idx").on(t.schoolId),
     index("section_enrollments_created_by_idx").on(t.createdBy),
     check("section_enrollments_dates_check", sql.raw(`ends_on is null or ends_on >= starts_on`)),
+  ],
+);
+
+export const LIST_KINDS = ["static", "dynamic"] as const;
+
+// A saved set of students. Static: picked by hand (members below, effective-
+// dated). Dynamic: a query spec over the students source, evaluated when the
+// list is opened. Sensitivity is the highest of the fields its filter uses;
+// it decides who the list can be shared with.
+export const lists = pgTable(
+  "lists",
+  {
+    ...base(),
+    schoolYearId: uuid("school_year_id")
+      .notNull()
+      .references(() => schoolYears.id),
+    name: text("name").notNull(),
+    description: text("description"),
+    kind: text("kind").notNull(),
+    spec: jsonb("spec"),
+    ownerStaffId: uuid("owner_staff_id")
+      .notNull()
+      .references(() => staff.id),
+    sensitivity: text("sensitivity").notNull().default("standard"),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("lists_year_idx").on(t.schoolYearId),
+    index("lists_owner_idx").on(t.ownerStaffId),
+    index("lists_school_idx").on(t.schoolId),
+    index("lists_created_by_idx").on(t.createdBy),
+    check("lists_kind_check", sql.raw(`kind in (${sqlList(LIST_KINDS)})`)),
+    check("lists_spec_check", sql.raw(`(kind = 'dynamic') = (spec is not null)`)),
+    check("lists_sensitivity_check", sql.raw(`sensitivity in (${sqlList(SENSITIVITY_LEVELS)})`)),
+  ],
+);
+
+export const listMembers = pgTable(
+  "list_members",
+  {
+    ...base(),
+    listId: uuid("list_id")
+      .notNull()
+      .references(() => lists.id),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id),
+    startsOn: date("starts_on").notNull(),
+    endsOn: date("ends_on"),
+  },
+  (t) => [
+    index("list_members_list_idx").on(t.listId),
+    index("list_members_student_idx").on(t.studentId),
+    index("list_members_school_idx").on(t.schoolId),
+    index("list_members_created_by_idx").on(t.createdBy),
+    check("list_members_dates_check", sql.raw(`ends_on is null or ends_on >= starts_on`)),
   ],
 );

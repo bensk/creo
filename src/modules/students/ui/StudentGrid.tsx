@@ -68,6 +68,7 @@ export function StudentGrid({
   initialViews,
   userCanEdit,
   canManageFields,
+  saveList,
 }: {
   fields: CompiledColumn[];
   initialSpec: QuerySpecInput & { columns: string[] };
@@ -75,6 +76,10 @@ export function StudentGrid({
   initialViews: SavedView[];
   userCanEdit: boolean;
   canManageFields: boolean;
+  /** Saves a list (from the lists feature); the page passes it in so this module doesn't depend on that one. */
+  saveList: (input:
+    | { name: string; kind: "dynamic"; spec: { source: "students"; filters: QuerySpecInput["filters"]; search?: string } }
+    | { name: string; kind: "static"; studentIds: string[] }) => Promise<{ ok: true; data: { id: string } } | { ok: false; error: string }>;
 }) {
   const router = useRouter();
   const [spec, setSpec] = useState(initialSpec);
@@ -82,7 +87,7 @@ export function StudentGrid({
   const [views, setViews] = useState(initialViews);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [panel, setPanel] = useState<"filter" | "columns" | "views" | "bulk" | null>(null);
+  const [panel, setPanel] = useState<"filter" | "columns" | "views" | "bulk" | "list" | null>(null);
   const [loading, startLoading] = useTransition();
   const [theme, setTheme] = useState<Partial<Theme>>({});
   const gridRef = useRef<DataEditorRef>(null);
@@ -222,6 +227,7 @@ export function StudentGrid({
             Edit {checkedRows.length} selected
           </ToolbarButton>
         )}
+        <ToolbarButton active={panel === "list"} onClick={() => setPanel(panel === "list" ? null : "list")}>Save as list</ToolbarButton>
         {canManageFields && (
           <Link href="/students/fields" className="flex h-9 items-center rounded-md px-2 text-sm text-link hover:underline">Fields</Link>
         )}
@@ -249,6 +255,24 @@ export function StudentGrid({
             onAdd={(filter) => {
               setSpec((s) => ({ ...s, filters: [...(s.filters ?? []), filter] }));
               setPanel(null);
+            }}
+            onClose={() => setPanel(null)}
+          />
+        )}
+        {panel === "list" && (
+          <SaveListPanel
+            ticked={checkedRows.map((i) => result.rows[i]?.id).filter((id): id is string => Boolean(id))}
+            shown={result.rows.map((r) => r.id)}
+            hasFilter={(spec.filters ?? []).length > 0 || Boolean(spec.search)}
+            onSave={async (name, mode, ids) => {
+              const saved = await saveList(
+                mode === "dynamic"
+                  ? { name, kind: "dynamic", spec: { source: "students", filters: spec.filters ?? [], search: spec.search || undefined } }
+                  : { name, kind: "static", studentIds: ids },
+              );
+              if (!saved.ok) return saved.error;
+              router.push(`/lists/${saved.data.id}`);
+              return null;
             }}
             onClose={() => setPanel(null)}
           />
@@ -429,6 +453,51 @@ function ColumnPanel({ fields, selected, onChange }: { fields: CompiledColumn[];
         </div>
       ))}
     </fieldset>
+  );
+}
+
+function SaveListPanel({ ticked, shown, hasFilter, onSave, onClose }: {
+  ticked: string[];
+  shown: string[];
+  hasFilter: boolean;
+  onSave: (name: string, mode: "dynamic" | "static", ids: string[]) => Promise<string | null>;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [mode, setMode] = useState<"dynamic" | "static">(ticked.length ? "static" : hasFilter ? "dynamic" : "static");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const ids = ticked.length ? ticked : shown;
+  return (
+    <form
+      className="grid max-w-xl gap-3 rounded-lg border border-line-soft bg-surface-raised p-4"
+      onKeyDown={(e) => e.key === "Escape" && onClose()}
+      onSubmit={(e) => {
+        e.preventDefault();
+        start(async () => setError(await onSave(name, mode, ids)));
+      }}
+    >
+      <label className="grid gap-1 text-sm">
+        <span className="voice text-xs text-ink-muted">list name</span>
+        <input autoFocus required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} className="h-9 rounded-md border border-line bg-surface px-3" />
+      </label>
+      <fieldset className="grid gap-1 text-sm">
+        <legend className="voice text-xs text-ink-muted">who&apos;s on it</legend>
+        <label className={`flex items-center gap-2 ${hasFilter ? "" : "opacity-50"}`}>
+          <input type="radio" name="mode" checked={mode === "dynamic"} disabled={!hasFilter} onChange={() => setMode("dynamic")} />
+          Whoever matches these filters, kept up to date
+        </label>
+        <label className="flex items-center gap-2">
+          <input type="radio" name="mode" checked={mode === "static"} onChange={() => setMode("static")} />
+          {ticked.length ? `The ${ticked.length} ticked ${ticked.length === 1 ? "student" : "students"}` : `These ${shown.length} students, as of now`}
+        </label>
+      </fieldset>
+      {error && <p role="alert" className="rounded-md border-2 border-crimson px-3 py-2 text-sm">{error}</p>}
+      <div className="flex gap-2">
+        <button type="submit" disabled={pending || !name.trim()} className="h-9 rounded-md bg-ink-title px-4 text-sm font-semibold text-surface disabled:opacity-50">Save list</button>
+        <button type="button" onClick={onClose} className="h-9 rounded-md border border-line px-3 text-sm">Cancel</button>
+      </div>
+    </form>
   );
 }
 

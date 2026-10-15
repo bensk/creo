@@ -89,6 +89,26 @@ export const roleGroupMappings = pgTable(
   ],
 );
 
+// Which staff are in which Google Groups, refreshed by the Directory sync for
+// groups the SIS cares about (role mappings and share targets). A cache of
+// Google's state, replaced on each sync; it decides who a group share reaches.
+export const directoryGroupMembers = pgTable(
+  "directory_group_members",
+  {
+    ...base(),
+    googleGroupEmail: citext("google_group_email").notNull(),
+    staffId: uuid("staff_id")
+      .notNull()
+      .references(() => staff.id),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("directory_group_members_unique_idx").on(t.schoolId, t.googleGroupEmail, t.staffId),
+    index("directory_group_members_staff_idx").on(t.staffId),
+    index("directory_group_members_created_by_idx").on(t.createdBy),
+  ],
+);
+
 // Only a SHA-256 hash of the session token is stored, so a copy of this table
 // cannot be used to sign in. The user is the creator, so there is no created_by.
 export const sessions = pgTable(

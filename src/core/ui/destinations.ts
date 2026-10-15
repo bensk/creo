@@ -26,7 +26,7 @@ export const DESTINATIONS: readonly Destination[] = [
   { slug: "communication", label: "Communication", href: "/communication", goKey: "c", arrivesIn: "Phase 4", summary: "Calls, texts, emails, and meetings with families." },
   { slug: "trackers", label: "Trackers", href: "/trackers", goKey: "t", arrivesIn: "Phase 2", summary: "Trip eligibility, interventions, and other trackers, without a spreadsheet." },
   { slug: "dashboards", label: "Dashboards", href: "/dashboards", goKey: "d", arrivesIn: "Phase 6", summary: "Live dashboards built from the same data." },
-  { slug: "lists", label: "Lists", href: "/lists", goKey: "l", arrivesIn: "Phase 2", summary: "Saved and live lists of students." },
+  { slug: "lists", label: "Lists", href: "/lists", goKey: "l", summary: "Saved and live lists of students." },
   { slug: "change-log", label: "Change log", href: "/change-log", permission: "core.audit.read", summary: "Every change, who made it, and when." },
   { slug: "imports", label: "Imports", href: "/imports", permission: "integrations.run_imports", summary: "Upload Clever roster files and see past imports." },
   { slug: "slack", label: "Slack", href: "/slack", permission: "slack.manage", summary: "Where Slack notifications go, and at what detail." },

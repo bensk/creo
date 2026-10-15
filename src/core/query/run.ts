@@ -4,7 +4,7 @@ import { sensitiveReads } from "../audit/schema";
 import type { Viewer } from "../auth/viewer";
 import type { Db } from "../db/types";
 import { schools } from "../identity/schema";
-import { authorize } from "../permissions";
+import { authorize, highestLevel } from "../permissions";
 import { ROLE_SENSITIVITY } from "../permissions/matrix";
 import type { Sensitivity } from "../permissions/sensitivity";
 import { schoolYears } from "../school/schema";
@@ -101,3 +101,15 @@ export async function runQuery(db: Db, viewer: Viewer, input: QuerySpecInput, ct
   return { columns: compiled.columns, rows };
 }
 
+
+/**
+ * The highest sensitivity among the fields a spec filters or sorts on. A list
+ * or tracker built from it discloses that much about who's on it (e.g.
+ * "students with an IEP"), whatever columns it shows.
+ */
+export async function specSensitivity(db: Db, schoolId: string, input: QuerySpecInput): Promise<Sensitivity> {
+  const spec = querySpecSchema.parse(input);
+  const { fields } = await sourceWithFields(spec.source, { db, ctx: await fieldContext(db, schoolId) });
+  const used = new Set([...spec.filters.map((f) => f.field), ...spec.sort.map((s) => s.field)]);
+  return highestLevel(fields.filter((f) => used.has(f.key)).map((f) => f.sensitivity));
+}
