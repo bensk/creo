@@ -175,6 +175,19 @@ describe("importClever", () => {
     });
   });
 
+  it("never changes who may pick a student up", async () => {
+    await withSeed(async (tx) => {
+      const c = await cami(tx);
+      const [link] = await tx.select({ id: studentContacts.id, contactId: studentContacts.contactId }).from(studentContacts)
+        .innerJoin(contacts, eq(contacts.id, studentContacts.contactId))
+        .where(and(eq(studentContacts.studentId, c.id), isNull(studentContacts.endsOn), eq(contacts.firstName, "Rosa")));
+      await tx.update(studentContacts).set({ pickupAllowed: false }).where(eq(studentContacts.id, link!.id));
+      await run(tx, files({ students: [{ School_id: "S1", Student_id: "C-CAMI", State_id: c.osis!, First_name: "Camila", Last_name: "Martinez", Grade: "7", Dob: "06/04/2014", Contact_name: "Rosa Martínez", Contact_type: "Guardian", Contact_relationship: "Mother" }] }));
+      const [after] = await tx.select({ pickupAllowed: studentContacts.pickupAllowed }).from(studentContacts).where(eq(studentContacts.id, link!.id));
+      expect(after?.pickupAllowed).toBe(false);
+    });
+  });
+
   it("refuses real OSIS numbers in a synthetic database", async () => {
     await withSeed(async (tx) => {
       const f = files({ students: [{ School_id: "S1", Student_id: "C1", State_id: "212345678", First_name: "A", Last_name: "B", Grade: "6", Dob: "01/01/2015" }] });

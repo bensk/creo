@@ -109,7 +109,9 @@ export async function upsertImportedContact(ctx: ImportContext, studentId: strin
     }
   }
 
-  const link = { relationship: data.relationship, isGuardian: data.isGuardian, pickupAllowed: data.isGuardian, contactPriority: priority };
+  // Pickup permission is set by staff. Sources don't carry it, so an import
+  // only gives it a starting value (guardians may pick up) and never changes it.
+  const link = { relationship: data.relationship, isGuardian: data.isGuardian, contactPriority: priority };
   const [currentLink] = await ctx.db
     .select()
     .from(studentContacts)
@@ -117,7 +119,7 @@ export async function upsertImportedContact(ctx: ImportContext, studentId: strin
   if (!currentLink) {
     const [row] = await ctx.db
       .insert(studentContacts)
-      .values({ schoolId: ctx.schoolId, createdBy: ctx.actorUserId, studentId, contactId, ...link, startsOn: ctx.today })
+      .values({ schoolId: ctx.schoolId, createdBy: ctx.actorUserId, studentId, contactId, ...link, pickupAllowed: data.isGuardian, startsOn: ctx.today })
       .returning({ id: studentContacts.id });
     await ctx.audit("student_contact.create", "student_contacts", row!.id, null, link);
     if (change === "unchanged") change = "updated";
