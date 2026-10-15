@@ -17,7 +17,14 @@ const TONE: Record<string, string> = {
  * the next unmarked one; j / k move; space says the name; shift+p marks
  * everyone not yet marked present. Every mark saves on its own.
  */
-export function AttendanceTaker({ groupId, date, codes, students }: { groupId: string; date: string; codes: Code[]; students: Student[] }) {
+export function AttendanceTaker({ groupId, date, codes: allCodes, students, manage = false }: {
+  groupId: string; date: string; codes: Code[]; students: Student[];
+  /** Ops, admins, and leaders also get the office codes (ET, ISS, OSS) from a menu. */
+  manage?: boolean;
+}) {
+  // Homeroom codes are the one-letter ones (P / T / A / E), each with its key.
+  const codes = allCodes.filter((c) => c.code.length === 1);
+  const officeCodes = allCodes.filter((c) => c.code.length > 1);
   const [marks, setMarks] = useState<Map<string, string | null>>(() => new Map(students.map((s) => [s.id, s.codeId])));
   const firstOpen = Math.max(0, students.findIndex((s) => !s.codeId));
   const [selected, setSelected] = useState(firstOpen);
@@ -25,7 +32,7 @@ export function AttendanceTaker({ groupId, date, codes, students }: { groupId: s
   // Marks show at once and save in the background; count saves still in flight.
   const [saving, setSaving] = useState(0);
   const rows = useRef<(HTMLLIElement | null)[]>([]);
-  const codeById = useMemo(() => new Map(codes.map((c) => [c.id, c])), [codes]);
+  const codeById = useMemo(() => new Map(allCodes.map((c) => [c.id, c])), [allCodes]);
   const present = codes.find((c) => c.countsAs === "present");
   const keyFor = (c: Code) => c.code.charAt(0).toLowerCase();
   const marked = [...marks.values()].filter(Boolean).length;
@@ -125,7 +132,19 @@ export function AttendanceTaker({ groupId, date, codes, students }: { groupId: s
                   </button>
                 ))}
               </span>
-              <span className="voice w-20 text-right text-xs text-ink-muted">{code ? code.label.toLowerCase() : "not marked"}</span>
+              {manage && officeCodes.length > 0 && (
+                <select
+                  aria-label={`Other codes for ${s.name.preferredFirstName ?? s.name.legalFirstName}`}
+                  value={officeCodes.some((c) => c.id === current) ? current! : ""}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => { const c = officeCodes.find((x) => x.id === e.target.value); if (c) { setSelected(i); mark(i, c); } }}
+                  className="h-11 rounded-md border-2 border-line-soft bg-surface px-2 text-sm"
+                >
+                  <option value="">Other</option>
+                  {officeCodes.map((c) => <option key={c.id} value={c.id}>{c.code} · {c.label}</option>)}
+                </select>
+              )}
+              <span className="voice w-28 text-right text-xs text-ink-muted">{code ? code.label.toLowerCase() : "not marked"}</span>
             </li>
           );
         })}

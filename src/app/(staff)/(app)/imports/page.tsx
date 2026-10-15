@@ -3,6 +3,7 @@ import { requireViewer } from "@/core/auth/server";
 import { getDb } from "@/core/db/client";
 import { can } from "@/core/permissions";
 import { recentImportRuns } from "@/modules/integrations/queries";
+import { SchoolrunnerUpload } from "@/modules/attendance/ui/SchoolrunnerUpload";
 import { CleverUpload } from "@/modules/integrations/ui/CleverUpload";
 
 export const metadata = { title: "Imports" };
@@ -24,6 +25,7 @@ export default async function ImportsPage() {
         </p>
       </header>
       <CleverUpload />
+      <SchoolrunnerUpload />
       <section aria-labelledby="runs-h" className="grid gap-3">
         <h2 id="runs-h" className="text-lg font-semibold">Recent imports</h2>
         {runs.length === 0 ? (
@@ -46,7 +48,7 @@ export default async function ImportsPage() {
                     <td className="py-2">{SOURCE[r.source] ?? r.source}</td>
                     <td className="data py-2">{when.format(r.startedAt)}</td>
                     <td className="py-2">{r.status === "succeeded" ? "Done" : r.status === "failed" ? "Failed, nothing changed" : "Running"}</td>
-                    <td className="data py-2">{c.students ?? c.rows ?? "—"}</td>
+                    <td className="data py-2">{c.students ?? c.rows ?? (Array.isArray(c.days) ? `${(c.days as unknown[]).length} days` : "—")}</td>
                   </tr>
                 );
               })}
