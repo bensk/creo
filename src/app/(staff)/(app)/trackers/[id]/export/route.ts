@@ -23,7 +23,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const table = await loadTrackerTable(db, viewer, found.tracker, canEdit(found.access));
   const lines = [
     ["Name", "Grade", ...table.columns.map((c) => c.label)].map(cell).join(","),
-    ...table.rows.map((r) => [displayName(r.name), r.grade, ...table.columns.map((c) => r.values[c.key])].map(cell).join(",")),
+    ...table.rows.map((r) => [displayName(r.name), r.grade, ...table.columns.map((c) =>
+      c.type === "rule" ? (r.values[c.key] === true ? "Yes" : `No: ${(r.missing[c.key] ?? []).join("; ")}`) : r.values[c.key])].map(cell).join(",")),
   ];
   await recordAudit(db, {
     schoolId: viewer.schoolId, actorUserId: viewer.userId, action: "tracker.export", entity: "trackers", entityId: found.tracker.id,

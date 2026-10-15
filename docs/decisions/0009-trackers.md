@@ -12,3 +12,8 @@
 - **Columns are archived, not deleted,** and students leaving a tracker are archived, so answers are never lost.
 - **CSV download now; Google Sheets later.** The download holds only the columns the downloader can see and is audited. Creating a Google Sheet in the person's Drive needs a Drive permission at sign-in; that's a separate decision.
 - **The name search never goes in a link.** "Track these students" from the grid carries only the filters; with a name search active, the button explains why it's off.
+
+## Added October 15, 2026
+
+- **Rule columns.** A rule is a yes/no column: "yes when all of these hold", each condition checking one of the tracker's own columns (e.g. permission slip is yes, deposit is at least 50, attendance rate is at least 90). When the answer is no, the cell names what's missing. Rules are stored as computed columns (`computed.kind = "rule"`), so no schema change. A rule can't check another rule, its sensitivity is the highest of the columns it checks, it shows only to viewers who can see all of them, and a column a rule checks can't be removed until the rule is. Templates keep rules.
+- **Live updates.** Tracker writes send a notice with `pg_notify` on one channel (`creo_changes`), delivered on commit: the tracker, the rows changed, and who changed them, never values. Each server process keeps one LISTEN connection; each open tracker page has a Server-Sent Events stream (`/trackers/[id]/events`), whose access is checked when it opens. The page re-reads changed rows with the viewer's own permissions, or reloads when the tracker's shape changed. Cloud Run ends long requests at its timeout; the browser reconnects on its own, and each open stream holds one request slot, which counts toward an instance's concurrency.

@@ -5,13 +5,14 @@ import type { z } from "zod";
 import { requireViewer } from "@/core/auth/server";
 import { getDb } from "@/core/db/client";
 import { shareItem, unshareItem } from "@/core/sharing/manage";
-import { asShareable, getTracker, trackerOversight } from "./access";
+import { asShareable, canEdit, getTracker, trackerOversight } from "./access";
 import {
   addTrackerField, addTrackerRows, archiveTrackerField, createTracker, removeTrackerRow, saveTrackerTemplate, setTrackerCell, updateTracker,
   type trackerInput, type trackerUpdate,
 } from "./manage";
 import { populationSchema, type FieldSpec, type Population } from "./model";
 import { resolvePopulation } from "./population";
+import { loadTrackerTable } from "./table";
 
 export async function previewPopulationAction(population: Population): Promise<{ ok: true; count: number; sensitivity: string } | { ok: false; error: string }> {
   const viewer = await requireViewer("staff");
@@ -83,4 +84,13 @@ export async function unshareTrackerAction(trackerId: string, shareId: string) {
   const result = await unshareItem(db, viewer, asShareable(found.tracker), "trackers.create", await trackerOversight(db, viewer), shareId);
   revalidatePath(`/trackers/${trackerId}`);
   return result;
+}
+
+/** Re-reads rows someone else changed, as this viewer may see them (for live updates). */
+export async function trackerRowsAction(trackerId: string, rowIds: string[]) {
+  const viewer = await requireViewer("staff");
+  const db = getDb();
+  const found = await getTracker(db, viewer, trackerId);
+  if (!found || rowIds.length > 500) return null;
+  return (await loadTrackerTable(db, viewer, found.tracker, canEdit(found.access), rowIds)).rows;
 }

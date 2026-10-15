@@ -5,6 +5,7 @@ import { StudentName, type StudentNameParts } from "@/core/ui/StudentName";
 import { searchStudentsAction } from "@/modules/students/actions";
 import { addTrackerFieldAction, addTrackerRowsAction, archiveTrackerFieldAction, saveTrackerTemplateAction, updateTrackerAction } from "../actions";
 import type { FieldSpec } from "../model";
+import { NEEDS_VALUE, type RuleOp } from "../rules";
 import type { TrackerColumn } from "../table";
 
 interface Found { id: string; nameParts: StudentNameParts; grade: number | null; homeroom: string | null; enrolled: boolean }
@@ -12,8 +13,13 @@ const field = "h-9 rounded-md border border-line bg-surface px-3 text-sm";
 const button = "h-9 rounded-md border border-line px-3 text-sm disabled:opacity-50";
 const TYPES: [FieldSpec["type"], string][] = [
   ["boolean", "Yes / no"], ["text", "Short text"], ["long_text", "Long text"], ["number", "Number"], ["date", "Date"],
-  ["select", "One choice"], ["multi_select", "Several choices"], ["computed", "From student data"],
+  ["select", "One choice"], ["multi_select", "Several choices"], ["computed", "From student data"], ["rule", "Rule: yes when all conditions hold"],
 ];
+type Cond = { column: string; op: RuleOp; value: string };
+const OPS_FOR = (type: string): [RuleOp, string][] =>
+  type === "boolean" ? [["is_true", "is yes"], ["is_false", "is no"], ["is_empty", "is empty"]]
+  : type === "number" || type === "date" || type === "computed" ? [["gte", "is at least"], ["lte", "is at most"], ["gt", "is more than"], ["lt", "is less than"], ["eq", "is"], ["is_empty", "is empty"], ["is_not_empty", "is filled in"]]
+  : [["eq", "is"], ["neq", "is not"], ["is_empty", "is empty"], ["is_not_empty", "is filled in"]];
 
 /** Adding columns and students, templates, rename and archive: for people who can edit the tracker. */
 export function TrackerTools({ tracker, columns, snapshot, computedChoices }: {
@@ -27,6 +33,9 @@ export function TrackerTools({ tracker, columns, snapshot, computedChoices }: {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [draft, setDraft] = useState({ type: "boolean" as FieldSpec["type"], label: "", options: "", sensitivity: "standard", field: computedChoices[0]?.key ?? "", since: "" });
+  const ruleable = columns.filter((c) => c.type !== "rule");
+  const blankCond = (): Cond => ({ column: ruleable[0]?.key ?? "", op: (OPS_FOR(ruleable[0]?.type ?? "text")[0]![0]), value: "" });
+  const [conds, setConds] = useState<Cond[]>([blankCond()]);
   const [query, setQuery] = useState("");
   const [found, setFound] = useState<Found[]>([]);
   const [name, setName] = useState(tracker.name);
@@ -54,10 +63,12 @@ export function TrackerTools({ tracker, columns, snapshot, computedChoices }: {
         <form className="flex flex-wrap items-end gap-2 rounded-lg border border-line-soft p-3" onKeyDown={(e) => e.key === "Escape" && setPanel(null)}
           onSubmit={(e) => {
             e.preventDefault();
-            const spec: FieldSpec = draft.type === "computed"
+            const spec: FieldSpec = draft.type === "rule"
+              ? { type: "rule", label: draft.label, all: conds.map((c) => ({ column: c.column, op: c.op, value: NEEDS_VALUE.has(c.op) ? (c.value.trim() === "" ? null : Number.isFinite(Number(c.value)) && ruleable.find((r) => r.key === c.column)?.type !== "text" ? Number(c.value) : c.value) : null })) }
+              : draft.type === "computed"
               ? { type: "computed", label: draft.label || (computedChoices.find((c) => c.key === draft.field)?.label ?? ""), field: draft.field, since: draft.since || null }
               : { type: draft.type, label: draft.label, options: draft.options.split(",").map((o) => o.trim()).filter(Boolean), sensitivity: draft.sensitivity as "standard" };
-            act(() => addTrackerFieldAction(tracker.id, spec), `Added “${spec.label}”.`, () => setDraft({ ...draft, label: "", options: "" }));
+            act(() => addTrackerFieldAction(tracker.id, spec), `Added “${spec.label}”.`, () => { setDraft({ ...draft, label: "", options: "" }); setPanel(null); });
           }}>
           <label className="grid gap-1 text-sm"><span className="voice text-xs text-ink-muted">column</span>
             <input autoFocus className={field} value={draft.label} maxLength={80} onChange={(e) => setDraft({ ...draft, label: e.target.value })} placeholder="e.g. Deposit paid" /></label>
@@ -69,7 +80,39 @@ export function TrackerTools({ tracker, columns, snapshot, computedChoices }: {
             <label className="grid gap-1 text-sm"><span className="voice text-xs text-ink-muted">choices, separated by commas</span>
               <input className={`${field} w-64`} value={draft.options} onChange={(e) => setDraft({ ...draft, options: e.target.value })} /></label>
           )}
-          {draft.type === "computed" ? (
+          {draft.type === "rule" ? (
+            <div className="grid w-full gap-2">
+              <span className="voice text-xs text-ink-muted">yes when all of these hold</span>
+              {ruleable.length === 0 && <p className="text-sm">Add the columns this rule checks first.</p>}
+              {conds.map((c, i) => {
+                const col = ruleable.find((r) => r.key === c.column);
+                return (
+                  <div key={i} className="flex flex-wrap items-center gap-2">
+                    <select aria-label={`Condition ${i + 1} column`} className={field} value={c.column}
+                      onChange={(e) => { const t = ruleable.find((r) => r.key === e.target.value)?.type ?? "text"; setConds(conds.map((x, j) => (j === i ? { column: e.target.value, op: OPS_FOR(t)[0]![0], value: "" } : x))); }}>
+                      {ruleable.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+                    </select>
+                    <select aria-label={`Condition ${i + 1} test`} className={field} value={c.op} onChange={(e) => setConds(conds.map((x, j) => (j === i ? { ...x, op: e.target.value as RuleOp } : x)))}>
+                      {OPS_FOR(col?.type ?? "text").map(([op, text]) => <option key={op} value={op}>{text}</option>)}
+                    </select>
+                    {NEEDS_VALUE.has(c.op) && (
+                      col && (col.type === "select" || col.type === "multi_select") ? (
+                        <select aria-label={`Condition ${i + 1} value`} className={field} value={c.value} onChange={(e) => setConds(conds.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))}>
+                          <option value="">Choose</option>
+                          {col.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                      ) : (
+                        <input aria-label={`Condition ${i + 1} value`} className={`${field} w-32`} type={col?.type === "date" ? "date" : "text"} value={c.value}
+                          onChange={(e) => setConds(conds.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))} />
+                      )
+                    )}
+                    {conds.length > 1 && <button type="button" className="text-sm text-link hover:underline" onClick={() => setConds(conds.filter((_, j) => j !== i))}>Remove<span className="sr-only"> condition {i + 1}</span></button>}
+                  </div>
+                );
+              })}
+              {conds.length < 10 && ruleable.length > 0 && <div><button type="button" className="text-sm text-link hover:underline" onClick={() => setConds([...conds, blankCond()])}>And another condition</button></div>}
+            </div>
+          ) : draft.type === "computed" ? (
             <>
               <label className="grid gap-1 text-sm"><span className="voice text-xs text-ink-muted">student field</span>
                 <select className={field} value={draft.field} onChange={(e) => setDraft({ ...draft, field: e.target.value })}>

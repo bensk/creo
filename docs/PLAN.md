@@ -291,7 +291,7 @@ Each phase ends with a short demo to leadership and a written check against exit
 - [ ] Query engine v1: sources, metrics, dimensions from students, attendance, behavior — students source with attendance, behavior, cohort (groups, classes), and custom fields done; metrics and dimensions (aggregates) arrive with dashboards
 - [x] Tracker creation flow: choose population (all / grade / group / list / filter, live or snapshot) → name + columns → share (sharing on the tracker page; ADR 0009)
 - [x] "Track these students" entry points on group pages, list pages, and filtered grids
-- [ ] Computed columns, rule columns, tracker grid, Google Sheets export — computed columns (with "counting from"), the keyboard tracker grid with per-cell compare-and-set, and CSV download done; rule columns (eligibility) and Google Sheets export (needs a Drive permission decision) to do; live updates between editors (SSE) to do
+- [ ] Computed columns, rule columns, tracker grid, Google Sheets export — computed columns, rule columns ("eligible" style yes/no with what's missing), the keyboard tracker grid with per-cell compare-and-set, live updates between editors (SSE over LISTEN/NOTIFY), and CSV download done (ADR 0009); Google Sheets export waits on the Drive permission decision
 - [x] Sharing with people and Google Groups; sensitivity inheritance enforced in the share dialog (ADR 0008)
 - [x] Tracker templates ("Save as template" keeps the columns; start from one on the Trackers page)
 - [ ] (AI, optional) "Describe the columns" box that pre-fills step 2

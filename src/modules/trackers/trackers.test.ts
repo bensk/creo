@@ -8,7 +8,7 @@ import { shareItem } from "@/core/sharing/manage";
 import { addGroupMembers, createGroup, removeGroupMember } from "../cohorts/manage";
 import { groups } from "../cohorts/schema";
 import { asShareable, getTracker } from "./access";
-import { addTrackerField, addTrackerRows, createTracker, removeTrackerRow, saveTrackerTemplate, setTrackerCell, templatesFor } from "./manage";
+import { addTrackerField, addTrackerRows, archiveTrackerField, createTracker, removeTrackerRow, saveTrackerTemplate, setTrackerCell, templatesFor } from "./manage";
 import { syncLiveRows } from "./population";
 import { trackerRows } from "./schema";
 import { loadTrackerTable } from "./table";
@@ -146,6 +146,48 @@ describe("trackers", () => {
       expect(saved.ok).toBe(true);
       const templates = await templatesFor(tx, await as(tx, OPS));
       expect(templates.find((t) => t.name === "Science fair (template)")?.fields).toEqual([{ type: "select", label: "Project status", options: ["Not started", "Draft", "Done"], sensitivity: "standard" }]);
+    });
+  });
+
+  it("rule columns answer yes or no from other columns, and say what's missing", async () => {
+    await withSeed(async (tx) => {
+      const teacher = await as(tx, TEACHER);
+      const made = await createTracker(tx, teacher, {
+        name: "DC Trip 2027", population: { source: "group", kind: "live", ref: await groupId(tx, "Syracuse") },
+        fields: [
+          { type: "boolean", label: "Permission slip" }, { type: "number", label: "Deposit" },
+          { type: "computed", label: "Attendance", field: "attendanceRate" },
+          { type: "rule", label: "Eligible", all: [
+            { column: "permission_slip", op: "is_true" }, { column: "deposit", op: "gte", value: 50 }, { column: "attendance", op: "gte", value: 0 },
+          ] },
+        ],
+      });
+      if (!made.ok) throw new Error(made.error);
+      const tracker = (await getTracker(tx, teacher, made.data.id))!.tracker;
+      let table = await loadTrackerTable(tx, teacher, tracker, true);
+      expect(table.columns.find((c) => c.key === "eligible")).toMatchObject({ type: "rule", editable: false });
+      const row = table.rows[0]!;
+      expect(table.rows[0]!.missing.eligible).toEqual(["Permission slip is yes", "Deposit is at least 50"]);
+
+      await setTrackerCell(tx, teacher, { trackerId: tracker.id, rowId: row.rowId, key: "permission_slip", value: true, expected: null });
+      await setTrackerCell(tx, teacher, { trackerId: tracker.id, rowId: row.rowId, key: "deposit", value: "75", expected: null });
+      table = await loadTrackerTable(tx, teacher, tracker, true);
+      const after = table.rows.find((r) => r.rowId === row.rowId)!;
+      expect(after.values.eligible).toBe(true);
+      expect(after.missing.eligible).toBeUndefined();
+
+      expect(await archiveTrackerField(tx, teacher, { trackerId: tracker.id, key: "deposit" })).toMatchObject({ ok: false, error: /Eligible/ });
+      expect(await addTrackerField(tx, teacher, { trackerId: tracker.id, field: { type: "rule", label: "Bad", all: [{ column: "nope", op: "is_true" }] } }))
+        .toMatchObject({ ok: false, error: /doesn't exist/ });
+      expect(await addTrackerField(tx, teacher, { trackerId: tracker.id, field: { type: "rule", label: "Nested", all: [{ column: "eligible", op: "is_true" }] } }))
+        .toMatchObject({ ok: false, error: /another rule/ });
+
+      // Templates keep rules, and a tracker made from one works the same.
+      const saved = await saveTrackerTemplate(tx, teacher, { trackerId: tracker.id, name: "Trip", sharedWithSchool: false });
+      if (!saved.ok) throw new Error(saved.error);
+      const template = (await templatesFor(tx, teacher)).find((t) => t.id === saved.data.id)!;
+      const again = await createTracker(tx, teacher, { name: "Trip 2028", population: { source: "grade", kind: "live", grade: 7 }, fields: template.fields, templateId: template.id });
+      expect(again.ok).toBe(true);
     });
   });
 
