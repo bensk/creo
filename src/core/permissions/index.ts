@@ -42,6 +42,16 @@ export async function can(db: Db, viewer: Viewer, permission: string, target?: {
   return false;
 }
 
+/**
+ * Whether any of the viewer's roles holds a permission in any scope (e.g. a
+ * teacher's homeroom-only attendance). For showing a page or a button; the
+ * action itself still checks the scope for each student.
+ */
+export function holdsSomewhere(viewer: Viewer, permission: string): boolean {
+  if (!KNOWN_PERMISSIONS.has(permission)) throw new Error(`Unknown permission "${permission}"`);
+  return isStaff(viewer) && viewer.roles.some((role) => Boolean(ROLE_PERMISSIONS[role][permission]));
+}
+
 /** Like can(), but throws Forbidden. Use at the top of server actions. */
 export async function authorize(db: Db, viewer: Viewer, permission: string, target?: { studentId?: string }): Promise<void> {
   if (!(await can(db, viewer, permission, target))) throw new Forbidden(permission);

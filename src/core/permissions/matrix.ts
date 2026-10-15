@@ -29,6 +29,9 @@ export type PermissionScope = "all" | "homeroom";
 /** Role → permission key → scope. A key missing for a role is denied. */
 export const ROLE_PERMISSIONS: Readonly<Record<StaffRole, Readonly<Record<string, PermissionScope>>>> = {
   leader: {
+    // Plan decision 21: the homeroom teacher takes attendance; ops, admin, and leaders for anyone.
+    "attendance.take": "all",
+    "attendance.manage": "all",
     // Ben, Oct 15 2026: every staff member may make lists and trackers.
     "cohorts.create_lists": "all",
     "trackers.create": "all",
@@ -49,6 +52,9 @@ export const ROLE_PERMISSIONS: Readonly<Record<StaffRole, Readonly<Record<string
     "core.visibility.manage": "all",
   },
   admin: {
+    // Plan decision 21: the homeroom teacher takes attendance; ops, admin, and leaders for anyone.
+    "attendance.take": "all",
+    "attendance.manage": "all",
     // Ben, Oct 15 2026: every staff member may make lists and trackers.
     "cohorts.create_lists": "all",
     "trackers.create": "all",
@@ -72,6 +78,9 @@ export const ROLE_PERMISSIONS: Readonly<Record<StaffRole, Readonly<Record<string
     "core.visibility.manage": "all",
   },
   ops: {
+    // Plan decision 21: the homeroom teacher takes attendance; ops, admin, and leaders for anyone.
+    "attendance.take": "all",
+    "attendance.manage": "all",
     // Ben, Oct 15 2026: every staff member may make lists and trackers.
     "cohorts.create_lists": "all",
     "trackers.create": "all",
@@ -95,6 +104,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<StaffRole, Readonly<Record<string
     "cohorts.view": "all",
   },
   teacher: {
+    // Plan decision 21: the homeroom teacher takes attendance; ops, admin, and leaders for anyone.
+    "attendance.take": "homeroom",
     // Ben, Oct 15 2026: every staff member may make lists and trackers.
     "cohorts.create_lists": "all",
     "trackers.create": "all",

@@ -21,7 +21,7 @@ export const DESTINATIONS: readonly Destination[] = [
   { slug: "", label: "Home", href: "/", summary: "Your groups and your day." },
   { slug: "students", label: "Students", href: "/students", goKey: "s", permission: "students.view", summary: "Search, profiles, and the student grid." },
   { slug: "groups", label: "Groups", href: "/groups", permission: "cohorts.view", summary: "Homerooms, grade teams, classes, and other groups." },
-  { slug: "attendance", label: "Attendance", href: "/attendance", goKey: "a", arrivesIn: "Phase 3", summary: "Daily homeroom attendance, by keyboard or touch." },
+  { slug: "attendance", label: "Attendance", href: "/attendance", goKey: "a", summary: "Daily homeroom attendance, by keyboard or touch." },
   { slug: "behavior", label: "Behavior", href: "/behavior", goKey: "b", arrivesIn: "Phase 4", summary: "Behavior events, points, and restorative follow-ups." },
   { slug: "communication", label: "Communication", href: "/communication", goKey: "c", arrivesIn: "Phase 4", summary: "Calls, texts, emails, and meetings with families." },
   { slug: "trackers", label: "Trackers", href: "/trackers", goKey: "t", summary: "Trip eligibility, interventions, and other trackers, without a spreadsheet." },

@@ -41,3 +41,13 @@ describe("displaySteps", () => {
     expect(displaySteps("g s", true)).toEqual([["G"], ["S"]]);
   });
 });
+
+describe("space and shift+letter", () => {
+  const ev = (key: string, shiftKey = false) => ({ key, shiftKey, metaKey: false, ctrlKey: false, altKey: false });
+  it("names space and shifted letters as their own steps", () => {
+    expect(eventToStep(ev(" "), true)).toBe("space");
+    expect(eventToStep(ev("P", true), true)).toBe("shift+p");
+    expect(eventToStep(ev("p"), true)).toBe("p");
+    expect(eventToStep(ev("?", true), true)).toBe("?");
+  });
+});

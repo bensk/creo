@@ -14,5 +14,10 @@ export const attendanceStudentFields: FieldDef[] = [
   },
   { key: "absences", label: "Absences", type: "number", sensitivity: "standard", group: "Attendance", defaultVisible: true,
     select: (ctx) => days(ctx, "'absent','excused'") },
+  {
+    // New York's definition: missing 10% or more of school days (present or tardy under 90%).
+    key: "chronicallyAbsent", label: "Chronically absent", type: "boolean", sensitivity: "standard", group: "Attendance",
+    select: (ctx) => sql`coalesce(100.0 * ${days(ctx, "'present','tardy'")} / nullif(${days(ctx, "'present','tardy','absent','excused'")}, 0) < 90, false)`,
+  },
   { key: "tardies", label: "Tardies", type: "number", sensitivity: "standard", group: "Attendance", select: (ctx) => days(ctx, "'tardy'") },
 ];

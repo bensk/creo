@@ -299,8 +299,8 @@ Each phase ends with a short demo to leadership and a written check against exit
 
 ### Phase 3 — Attendance
 - [ ] Attendance codes with SIRS mapping; school days from Google Calendar
-- [ ] Homeroom attendance taking (keyboard and touch), late arrivals desk flow; pronunciation shown next to every name, with `space` to play the selected student's clip
-- [ ] Attendance rates, chronic absence flags, daily missing-attendance report
+- [ ] Homeroom attendance taking (keyboard and touch), late arrivals desk flow; pronunciation shown next to every name, with `space` to play the selected student's clip — homeroom taking done (p / a / t / e mark and move on, shift+p marks the rest present, space says the name, large touch buttons; teachers today for their homeroom, ops / admin / leaders any homeroom and earlier days); late desk waits on the schema questions
+- [ ] Attendance rates, chronic absence flags, daily missing-attendance report — rates and a Chronically absent field (under 90% this year) in the grid, and the missing-attendance view for ops on the Attendance page done; rates by school day wait on `school_days`
 - [ ] Parallel run: SIS and Schoolrunner both recorded; nightly reconciliation report
 - [ ] Slack: attendance-not-taken DM
 - Exit (cutover): four consecutive weeks of reconciliation with zero unexplained differences; ops sign-off.
