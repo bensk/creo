@@ -13,6 +13,8 @@ const nextConfig: NextConfig = {
   pageExtensions: [...devOnlyExtensions, "tsx", "ts"],
   // Keep the dev badge clear of the sidebar's account controls (bottom left).
   devIndicators: { position: "bottom-right" },
+  // Clever roster uploads (six CSV files) and name recordings go through server actions.
+  experimental: { serverActions: { bodySizeLimit: "10mb" } },
 };
 
 export default createNextIntlPlugin("./src/i18n/request.ts")(nextConfig);

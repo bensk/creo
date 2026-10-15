@@ -53,7 +53,7 @@ Effective-dated memberships throughout (`starts_on`, `ends_on` = last day includ
 - `groups` (type: homeroom / grade_team / advisory / intervention / club / team / custom, name, school_year_id, grade_level, owner, google_group_email, archived_at)
 - `group_memberships` (group_id, student_id, starts_on, ends_on)
 - `group_staff` (group_id, staff_id, function: homeroom_teacher / lead / member, starts_on, ends_on) — drives "my" views, teachers' sensitive access for assigned students, and homeroom attendance rights
-- `courses`, `sections`, `section_staff`, `section_enrollments`
+- `courses` (school_year_id, name, number, subject, description), `sections` (course_id, name, section_number, period, grade_level, term, archived_at), `section_staff` (role: primary / co_teacher, starts_on, ends_on), `section_enrollments` (starts_on, ends_on) — shipped in Phase 1 with the Clever import; teaching a section counts as an assignment
 
 **Attendance**
 - `attendance_codes` (code, label, counts_as: present/absent/tardy/excused, sirs_code, position, archived_at)
@@ -181,7 +181,8 @@ The same pattern covers intervention groups, mastery trackers, retention reviews
 | Google OAuth | Sign-in, `hd=creoprep.org` restriction | in | 0 |
 | Workspace Directory | Staff roster, Google Groups → roles | in, nightly | 0 |
 | Big Data Tracker (Notion database) | Source of truth for OSIS, grade, homeroom during transition | in, nightly | 1 |
-| Schoolrunner API (`creoprep.schoolrunner.org/api/v1/`) | Historical + live attendance, behavior, comm, grades during transition | in, nightly | 1 |
+| Clever roster files (sent by Schoolrunner; ADR 0007) | Students, contacts, IEP/ELL, demographics, courses, sections, section teachers and students, homerooms. Uploaded on the Imports page; later the SIS writes these files to Clever | in (upload), later out | 1 |
+| Schoolrunner exports | Historical attendance, behavior, comm during transition | in | 1 |
 | Google Calendar | Instructional days, school events | in | 3 |
 | Gmail | Attach family emails to comm logs (opt-in per staff) | in | 4 |
 | Google Sheets | One-click export of any view/tracker | out | 2 |
@@ -277,7 +278,7 @@ Each phase ends with a short demo to leadership and a written check against exit
 ### Phase 1 — Students, contacts, the grid
 - [x] Slack app: signing-secret and workspace verification, user linking by confirmed email, `/student` lookup (ephemeral, audited), link unfurls (type and title only), `slack_rules` and channel approval on the Slack page (admin, leader; names in a channel need an admin), `notify.ts` with the privacy rules and `slack_messages` logging, app manifest and setup guide (ADR 0006, `docs/setup/slack.md`). Installing it in the Creo workspace waits for hosting
 - [x] Students, enrollments, contacts, supports schema (plus pronunciations, custom field definitions, saved views, import runs, external IDs, Slack tables, and basic attendance and behavior tables)
-- [ ] Importers: Big Data Tracker, Schoolrunner students/contacts/attendance/behavior history — Big Data Tracker (Notion) importer done and tested (ADR 0003), runs once the Notion token is stored; Schoolrunner waits for an API key
+- [ ] Importers: Big Data Tracker, Clever roster files, Schoolrunner attendance/behavior history — Big Data Tracker (Notion) importer done (ADR 0003), runs once the Notion token is stored; Clever roster upload done (ADR 0007: Imports page for admin and ops, preview then confirm, Clever wins over the tracker, sections and homerooms from Clever); attendance and behavior history wait on Schoolrunner's export headers
 - [x] Student database grid (Glide): sort, filter (query spec), column picker, saved views, inline edit with audit, bulk edit (tick rows, set one field for all of them in one transaction; rows the editor can't change are skipped and named) (ADR 0004); query engine v1 in `core/query`
 - [x] Student profile: header, groups (with history), contacts, enrollment history, supports (sensitive, logged), health, demographics and identifiers (restricted, logged), and a timeline of absences, tardies, and behavior (narratives confidential); communication joins the timeline when that module ships
 - [x] Custom fields on students (admin UI at Students → Fields for admins and leaders: add, edit, archive; each field has a type and a sensitivity; values are written one key at a time with `jsonb_set` and a version check, and show up in the grid, filters, and saved views)
@@ -395,6 +396,7 @@ Not planned; add only if needed.
 26. Phase 1 schema approved (October 9, 2026), including basic attendance and behavior tables pulled forward to hold Schoolrunner history (read-only until Phases 3 and 4). Student photos are uploaded one at a time by ops. The Big Data Tracker lives in Notion. The Schoolrunner importer waits for an API key.
 27. Big Data Tracker IEP column: Received → IEP; 504 → 504 plan; Missing IEP → IEP noted "not yet received from the previous school"; "No IEP – interested in evaluation" is not stored yet. Next imports to propose: photo consent (Social Media), medical alerts and allergies, demographics and address.
 28. Access matrix question 1 decided by Ben (October 9, 2026): a one-line medical alert on each student is standard sensitivity; allergy and other health details stay sensitive. Photo consent is standard. A blank "Social Media" value in the tracker imports as unknown, never as yes. The tracker's "FRP (meals)" column is the meal form's status, so no income data is stored.
+29. Clever roster import (Ben, October 13, 2026; ADR 0007): Schoolrunner's Clever files replace the Schoolrunner API for roster data, uploaded on an Imports page (admin and ops; `integrations.run_imports` confirmed for both). Clever wins over the Big Data Tracker for the fields it carries. Sections, section staff, and section enrollments added now; section teachers count as assigned for sensitive fields. Homerooms come from Clever's homeroom sections. Later the SIS will send these files to Clever.
 
 ## Open decisions
 

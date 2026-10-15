@@ -45,7 +45,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<StaffRole, Readonly<Record<string
   admin: {
     "students.edit_alerts": "all", // PROPOSED
     "students.manage_fields": "all", // PROPOSED
-    "integrations.run_imports": "all", // PROPOSED
+    "integrations.run_imports": "all", // confirmed by Ben, Oct 13 2026 (Clever uploads)
     "slack.manage": "all",
     // CLAUDE.md: student names go only to private channels an admin has allowlisted.
     "slack.allow_names": "all",
@@ -61,7 +61,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<StaffRole, Readonly<Record<string
   },
   ops: {
     "students.edit_alerts": "all", // PROPOSED
-    "integrations.run_imports": "all", // PROPOSED
+    "integrations.run_imports": "all", // confirmed by Ben, Oct 13 2026 (Clever uploads)
     "students.view": "all",
     "students.edit_identity": "all", // PROPOSED
     "students.manage_enrollment": "all", // PROPOSED

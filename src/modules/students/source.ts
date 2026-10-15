@@ -26,13 +26,20 @@ export const studentsSource: SourceDef = {
       limit 1
     ) e on true`,
   scope: (ctx) => sql`${s("school_id")} = ${ctx.schoolId}`,
-  assigned: (staffId, ctx) => sql`exists (
+  // Homeroom, grade team, and other groups they staff, or sections they teach.
+  assigned: (staffId, ctx) => sql`(exists (
     select 1 from group_memberships gm
     join group_staff gs on gs.group_id = gm.group_id
     where gm.student_id = s.id and gs.staff_id = ${staffId}
       and gm.starts_on <= ${ctx.today}::date and (gm.ends_on is null or gm.ends_on >= ${ctx.today}::date)
       and gs.starts_on <= ${ctx.today}::date and (gs.ends_on is null or gs.ends_on >= ${ctx.today}::date)
-  )`,
+  ) or exists (
+    select 1 from section_enrollments se
+    join section_staff ss on ss.section_id = se.section_id
+    where se.student_id = s.id and ss.staff_id = ${staffId}
+      and se.starts_on <= ${ctx.today}::date and (se.ends_on is null or se.ends_on >= ${ctx.today}::date)
+      and ss.starts_on <= ${ctx.today}::date and (ss.ends_on is null or ss.ends_on >= ${ctx.today}::date)
+  ))`,
   searchFields: ["name", "legalFirstName", "legalLastName"],
   defaultSort: [{ field: "name", dir: "asc" }],
   dynamicFields: async (db, ctx) => (await listCustomFields(db, ctx.schoolId)).map(customFieldToField),

@@ -2,15 +2,16 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { currentOn } from "@/core/db/dates";
 import type { Db } from "@/core/db/types";
 import { schools } from "@/core/identity/schema";
-import { groupMemberships, groups, groupStaff } from "./schema";
+import { groupMemberships, groups, groupStaff, sectionEnrollments, sectionStaff } from "./schema";
 
 // Public queries other modules and core may use. Nothing outside this module
 // reads its tables directly.
 
 /**
  * Whether a staff member currently works with a student: the student is
- * currently in a group (homeroom, grade team, ...) the staff member currently
- * staffs. Drives teachers' access to sensitive fields for assigned students.
+ * currently in a group (homeroom, grade team, ...) or a section the staff
+ * member currently staffs or teaches. Drives teachers' access to sensitive
+ * fields for assigned students.
  */
 export async function isStaffAssignedToStudent(db: Db, staffId: string, studentId: string): Promise<boolean> {
   const staffed = db
@@ -30,7 +31,25 @@ export async function isStaffAssignedToStudent(db: Db, staffId: string, studentI
       ),
     )
     .limit(1);
-  return Boolean(row);
+  if (row) return true;
+  const taught = db
+    .select({ sectionId: sectionStaff.sectionId })
+    .from(sectionStaff)
+    .innerJoin(schools, eq(schools.id, sectionStaff.schoolId))
+    .where(and(eq(sectionStaff.staffId, staffId), currentOn(sectionStaff.startsOn, sectionStaff.endsOn)));
+  const [inSection] = await db
+    .select({ id: sectionEnrollments.id })
+    .from(sectionEnrollments)
+    .innerJoin(schools, eq(schools.id, sectionEnrollments.schoolId))
+    .where(
+      and(
+        eq(sectionEnrollments.studentId, studentId),
+        inArray(sectionEnrollments.sectionId, taught),
+        currentOn(sectionEnrollments.startsOn, sectionEnrollments.endsOn),
+      ),
+    )
+    .limit(1);
+  return Boolean(inSection);
 }
 
 /** Whether a staff member is currently the homeroom teacher of the student's current homeroom. */

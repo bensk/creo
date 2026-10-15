@@ -84,21 +84,26 @@ async function editCamiPronouns(page: Page, value: string) {
   await page.getByRole("button", { name: /^Columns/ }).click();
   await page.getByLabel("Search students").fill("cami mart");
   await expect(count(page)).toHaveText("1 student");
-  // Name, Pronunciation, Pronouns: click Name in the first row, then move right twice.
-  // The canvas redraws just after the count updates and exposes no DOM to wait
-  // on, so retry the click until the cell editor opens.
+  // Columns: row checkboxes (44 px), Name (200), Pronunciation (150), Pronouns (150).
+  // Select the Pronouns cell in the first row and edit it from the keyboard.
+  // The canvas redraws after the count updates and exposes no DOM to wait on,
+  // so retry the whole edit until it saves. A retry after a save is harmless.
   const editor = page.locator("#portal textarea, #portal input").first();
   await expect(async () => {
     const box = (await page.getByTestId("student-grid").boundingBox())!;
-    await page.mouse.click(box.x + 120, box.y + 52);
-    await page.keyboard.press("ArrowRight");
-    await page.keyboard.press("ArrowRight");
+    await page.mouse.click(box.x + 44 + 200 + 150 + 75, box.y + 52);
     await page.keyboard.press("Enter");
-    await expect(editor).toBeVisible({ timeout: 1000 });
-  }).toPass({ timeout: 10_000 });
-  await editor.fill(value);
-  await page.keyboard.press("Enter");
-  await expect(page.getByText("Saved “Pronouns”.")).toBeVisible();
+    await expect(editor).toBeVisible({ timeout: 1500 });
+    // Real keystrokes, as a person types: select what's there, then type over it.
+    await page.keyboard.press("ControlOrMeta+a");
+    await editor.pressSequentially(value);
+    await expect(editor).toHaveValue(value, { timeout: 500 });
+    // Glide stores the typed text a moment after the keystroke; an Enter
+    // sooner than any person could press it commits the old (unchanged) value.
+    await page.waitForTimeout(150);
+    await page.keyboard.press("Enter");
+    await expect(page.getByText("Saved “Pronouns”.")).toBeVisible({ timeout: 2500 });
+  }).toPass({ timeout: 25_000 });
 }
 
 test("a homeroom teacher edits a pronoun from the keyboard, and it saves", async ({ page }) => {
