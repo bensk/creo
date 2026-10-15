@@ -80,6 +80,9 @@ export async function savePronunciation(
 
         const [row] = await tx.insert(namePronunciations).values({
           schoolId: viewer.schoolId, createdBy: viewer.userId, studentId: i.studentId, phonetic, audioObjectKey, recordedByKind: "staff",
+          // The newest row is current. now() is fixed for a whole transaction, so
+          // two saves in one would tie; the clock time keeps them in order.
+          createdAt: new Date(),
         }).returning({ id: namePronunciations.id });
         await audit({
           action: "student.set_pronunciation", entity: "students", entityId: i.studentId,
