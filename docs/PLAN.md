@@ -286,7 +286,7 @@ Each phase ends with a short demo to leadership and a written check against exit
 - Exit: leaders use search + profiles daily for two weeks; import diff against Schoolrunner shows zero unexplained mismatches.
 
 ### Phase 2 — Cohorts, lists, trackers
-- [ ] Groups and effective-dated memberships; homeroom/team/section management UI
+- [x] Groups and effective-dated memberships; homeroom/team/section management UI (Groups page, group and class pages, "Your classes" on Home; ops, leaders, and admins create interventions, advisories, clubs, and teams and change their students and staff; homeroom and grade team students come from the imports, so only their staff can be changed by hand)
 - [ ] Static and dynamic lists
 - [ ] Query engine v1: sources, metrics, dimensions from students, attendance, behavior
 - [ ] Tracker creation flow: choose population (all / grade / group / list / filter, live or snapshot) → name + columns → share

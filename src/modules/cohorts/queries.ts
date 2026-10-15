@@ -1,8 +1,10 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
-import { currentOn } from "@/core/db/dates";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { staff } from "@/core/auth/schema";
+import { currentOn, schoolToday } from "@/core/db/dates";
 import type { Db } from "@/core/db/types";
 import { schools } from "@/core/identity/schema";
-import { groupMemberships, groups, groupStaff, sectionEnrollments, sectionStaff } from "./schema";
+import { schoolYears } from "@/core/school/schema";
+import { courses, groupMemberships, groups, groupStaff, sectionEnrollments, sections, sectionStaff } from "./schema";
 
 // Public queries other modules and core may use. Nothing outside this module
 // reads its tables directly.
@@ -134,4 +136,119 @@ export async function membershipsForStudent(db: Db, studentId: string) {
     .innerJoin(schools, eq(schools.id, groupMemberships.schoolId))
     .where(eq(groupMemberships.studentId, studentId))
     .orderBy(sql`${current} desc`, groups.type, sql`${groupMemberships.startsOn} desc`);
+}
+
+export const IMPORT_MANAGED_GROUP_TYPES = ["homeroom", "grade_team"] as const;
+
+/** This year's groups (archived last), with current student and staff counts. */
+export async function listGroups(db: Db, schoolId: string) {
+  return db
+    .select({
+      id: groups.id, name: groups.name, type: groups.type, gradeLevel: groups.gradeLevel, archivedAt: groups.archivedAt,
+      students: sql<number>`(select count(*)::int from group_memberships gm where gm.group_id = "groups"."id"
+        and gm.starts_on <= ${schoolToday} and (gm.ends_on is null or gm.ends_on >= ${schoolToday}))`,
+      staffNames: sql<string[]>`coalesce((select array_agg(coalesce(st.preferred_name, st.given_name) || ' ' || st.family_name order by gs.function, st.family_name)
+        from group_staff gs join staff st on st.id = gs.staff_id where gs.group_id = "groups"."id"
+        and gs.starts_on <= ${schoolToday} and (gs.ends_on is null or gs.ends_on >= ${schoolToday})), '{}')`,
+    })
+    .from(groups)
+    .innerJoin(schools, eq(schools.id, groups.schoolId))
+    .innerJoin(schoolYears, eq(schoolYears.id, groups.schoolYearId))
+    .where(and(eq(groups.schoolId, schoolId), sql`${schoolToday} between ${schoolYears.startsOn} and ${schoolYears.endsOn}`))
+    .orderBy(sql`${groups.archivedAt} is not null`, groups.type, groups.gradeLevel, groups.name);
+}
+
+export async function getGroup(db: Db, schoolId: string, groupId: string) {
+  const [row] = await db.select().from(groups).where(and(eq(groups.schoolId, schoolId), eq(groups.id, groupId)));
+  return row ?? null;
+}
+
+/** A group's memberships (current, or every one it ever had). Names come from the students module's rosterFor. */
+export async function groupMembers(db: Db, groupId: string, options: { includePast?: boolean } = {}) {
+  const current = sql<boolean>`(${groupMemberships.startsOn} <= ${schoolToday} and (${groupMemberships.endsOn} is null or ${groupMemberships.endsOn} >= ${schoolToday}))`;
+  return db
+    .select({ membershipId: groupMemberships.id, studentId: groupMemberships.studentId, startsOn: groupMemberships.startsOn, endsOn: groupMemberships.endsOn, current })
+    .from(groupMemberships)
+    .innerJoin(schools, eq(schools.id, groupMemberships.schoolId))
+    .where(and(eq(groupMemberships.groupId, groupId), ...(options.includePast ? [] : [current])))
+    .orderBy(sql`${current} desc`, sql`${groupMemberships.endsOn} desc nulls first`);
+}
+
+/** A group's current staff. */
+export async function groupStaffMembers(db: Db, groupId: string) {
+  return db
+    .select({
+      id: groupStaff.id, staffId: staff.id, function: groupStaff.function, startsOn: groupStaff.startsOn,
+      name: sql<string>`coalesce(${staff.preferredName}, ${staff.givenName}) || ' ' || ${staff.familyName}`,
+    })
+    .from(groupStaff)
+    .innerJoin(staff, eq(staff.id, groupStaff.staffId))
+    .innerJoin(schools, eq(schools.id, groupStaff.schoolId))
+    .where(and(eq(groupStaff.groupId, groupId), currentOn(groupStaff.startsOn, groupStaff.endsOn)))
+    .orderBy(groupStaff.function, staff.familyName);
+}
+
+/** This year's classes (sections), with course, period, teachers, and current student count. */
+export async function listSections(db: Db, schoolId: string, options: { staffId?: string } = {}) {
+  const taughtBy = options.staffId
+    ? [sql`exists (select 1 from section_staff ss where ss.section_id = "sections"."id" and ss.staff_id = ${options.staffId}
+        and ss.starts_on <= ${schoolToday} and (ss.ends_on is null or ss.ends_on >= ${schoolToday}))`]
+    : [];
+  return db
+    .select({
+      id: sections.id, name: sections.name, period: sections.period, gradeLevel: sections.gradeLevel, courseName: courses.name,
+      students: sql<number>`(select count(*)::int from section_enrollments se where se.section_id = "sections"."id"
+        and se.starts_on <= ${schoolToday} and (se.ends_on is null or se.ends_on >= ${schoolToday}))`,
+      teacherNames: sql<string[]>`coalesce((select array_agg(coalesce(st.preferred_name, st.given_name) || ' ' || st.family_name order by ss.role desc, st.family_name)
+        from section_staff ss join staff st on st.id = ss.staff_id where ss.section_id = "sections"."id"
+        and ss.starts_on <= ${schoolToday} and (ss.ends_on is null or ss.ends_on >= ${schoolToday})), '{}')`,
+    })
+    .from(sections)
+    .leftJoin(courses, eq(courses.id, sections.courseId))
+    .innerJoin(schools, eq(schools.id, sections.schoolId))
+    .innerJoin(schoolYears, eq(schoolYears.id, sections.schoolYearId))
+    .where(and(
+      eq(sections.schoolId, schoolId), isNull(sections.archivedAt),
+      sql`${schoolToday} between ${schoolYears.startsOn} and ${schoolYears.endsOn}`, ...taughtBy,
+    ))
+    .orderBy(sections.gradeLevel, sections.period, sections.name);
+}
+
+export async function getSection(db: Db, schoolId: string, sectionId: string) {
+  const [row] = await db
+    .select({
+      id: sections.id, name: sections.name, period: sections.period, gradeLevel: sections.gradeLevel, termName: sections.termName,
+      archivedAt: sections.archivedAt, courseName: courses.name, courseNumber: courses.number,
+    })
+    .from(sections)
+    .leftJoin(courses, eq(courses.id, sections.courseId))
+    .where(and(eq(sections.schoolId, schoolId), eq(sections.id, sectionId)));
+  return row ?? null;
+}
+
+export async function sectionMembers(db: Db, sectionId: string) {
+  return db
+    .select({ studentId: sectionEnrollments.studentId, startsOn: sectionEnrollments.startsOn })
+    .from(sectionEnrollments)
+    .innerJoin(schools, eq(schools.id, sectionEnrollments.schoolId))
+    .where(and(eq(sectionEnrollments.sectionId, sectionId), currentOn(sectionEnrollments.startsOn, sectionEnrollments.endsOn)));
+}
+
+export async function sectionTeachers(db: Db, sectionId: string) {
+  return db
+    .select({ staffId: staff.id, role: sectionStaff.role, name: sql<string>`coalesce(${staff.preferredName}, ${staff.givenName}) || ' ' || ${staff.familyName}` })
+    .from(sectionStaff)
+    .innerJoin(staff, eq(staff.id, sectionStaff.staffId))
+    .innerJoin(schools, eq(schools.id, sectionStaff.schoolId))
+    .where(and(eq(sectionStaff.sectionId, sectionId), currentOn(sectionStaff.startsOn, sectionStaff.endsOn)))
+    .orderBy(sql`${sectionStaff.role} = 'co_teacher'`, staff.familyName);
+}
+
+/** Active staff, for choosing who works with a group. */
+export async function activeStaff(db: Db, schoolId: string) {
+  return db
+    .select({ id: staff.id, name: sql<string>`coalesce(${staff.preferredName}, ${staff.givenName}) || ' ' || ${staff.familyName}` })
+    .from(staff)
+    .where(and(eq(staff.schoolId, schoolId), eq(staff.status, "active")))
+    .orderBy(staff.familyName, staff.givenName);
 }
