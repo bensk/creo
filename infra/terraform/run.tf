@@ -21,7 +21,7 @@ resource "google_service_account" "directory" {
 
 locals {
   app_secrets  = ["database-url-app", "google-client-secret", "anthropic-api-key", "slack-signing-secret", "slack-bot-token"]
-  jobs_secrets = ["database-url-app", "database-url-migrate", "directory-credentials", "notion-token"]
+  jobs_secrets = ["database-url-app", "database-url-migrate", "directory-credentials", "notion-token", "slack-signing-secret", "slack-bot-token"]
   # Real student data is imported into production only; staging holds synthetic data.
   bdt_import_enabled     = var.notion_bdt_data_source_id != "" && local.is_production
   google_sign_in_enabled = var.google_client_id != ""
@@ -294,6 +294,86 @@ resource "google_cloud_scheduler_job" "directory_sync" {
   http_target {
     http_method = "POST"
     uri         = "https://run.googleapis.com/v2/projects/${var.project_id}/locations/${var.region}/jobs/${google_cloud_run_v2_job.directory_sync[0].name}:run"
+    oauth_token {
+      service_account_email = google_service_account.scheduler.email
+    }
+  }
+}
+
+# Each school morning, a DM to homeroom teachers whose attendance isn't finished
+# (through the Slack rules for "attendance.not_taken"). Only with Slack set up.
+resource "google_cloud_run_v2_job" "attendance_remind" {
+  count               = local.slack_enabled ? 1 : 0
+  name                = "creo-sis-attendance-remind"
+  location            = var.region
+  deletion_protection = local.is_production
+  labels              = local.labels
+
+  template {
+    task_count = 1
+    template {
+      service_account = google_service_account.jobs.email
+      max_retries     = 0
+      timeout         = "300s"
+      vpc_access {
+        egress = "PRIVATE_RANGES_ONLY"
+        network_interfaces {
+          network    = google_compute_network.vpc.id
+          subnetwork = google_compute_subnetwork.app.id
+        }
+      }
+      containers {
+        image = var.app_image
+        args  = ["attendance:remind"]
+        env {
+          name  = "APP_URL"
+          value = var.app_url
+        }
+        env {
+          name  = "SLACK_TEAM_ID"
+          value = var.slack_team_id
+        }
+        dynamic "env" {
+          for_each = { DATABASE_URL = "database-url-app", SLACK_SIGNING_SECRET = "slack-signing-secret", SLACK_BOT_TOKEN = "slack-bot-token" }
+          content {
+            name = env.key
+            value_source {
+              secret_key_ref {
+                secret  = google_secret_manager_secret.secrets[env.value].secret_id
+                version = "latest"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [template[0].template[0].containers[0].image, client, client_version]
+  }
+  depends_on = [google_secret_manager_secret_iam_member.jobs]
+}
+
+resource "google_cloud_run_v2_job_iam_member" "scheduler_runs_attendance_remind" {
+  count    = local.slack_enabled ? 1 : 0
+  name     = google_cloud_run_v2_job.attendance_remind[0].name
+  location = var.region
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.scheduler.email}"
+}
+
+# Weekdays at 9:30 a.m. New York time; the job itself skips days off on the school calendar.
+resource "google_cloud_scheduler_job" "attendance_remind" {
+  count     = local.slack_enabled ? 1 : 0
+  name      = "creo-sis-attendance-remind"
+  region    = var.region
+  schedule  = "30 9 * * 1-5"
+  time_zone = "America/New_York"
+
+  http_target {
+    http_method = "POST"
+    uri         = "https://run.googleapis.com/v2/projects/${var.project_id}/locations/${var.region}/jobs/${google_cloud_run_v2_job.attendance_remind[0].name}:run"
     oauth_token {
       service_account_email = google_service_account.scheduler.email
     }

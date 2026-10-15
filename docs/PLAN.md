@@ -302,7 +302,7 @@ Each phase ends with a short demo to leadership and a written check against exit
 - [x] Homeroom attendance taking (keyboard and touch), late arrivals desk flow; pronunciation shown next to every name, with `space` to play the selected student's clip (p / a / t / e, shift+p rest present; saves in the background with "all saved" and a guard before leaving; late desk: type a name, Enter, marked tardy with arrival time)
 - [x] Attendance rates, chronic absence flags, daily missing-attendance report (rates and Chronically absent in the grid; ops see marked / students per homeroom for any day, following the calendar)
 - [ ] Parallel run: SIS and Schoolrunner both recorded; nightly reconciliation report
-- [ ] Slack: attendance-not-taken DM
+- [x] Slack: attendance-not-taken DM (`attendance.not_taken`: weekdays 9:30, counts only, a DM to each homeroom teacher whose homeroom isn't finished; sent once an admin adds a "DM the staff member" rule on the Slack page; job `pnpm attendance:remind` in Terraform, on once Slack is set up)
 - Exit (cutover): four consecutive weeks of reconciliation with zero unexplained differences; ops sign-off.
 
 ### Phase 4 — Behavior, restorative practices, communication
