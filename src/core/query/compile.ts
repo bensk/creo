@@ -53,7 +53,8 @@ function checkValue(field: FieldDef, filter: Filter): unknown {
     return v;
   };
   if (op === "in" || op === "not_in") {
-    if (!Array.isArray(value) || value.length === 0 || value.length > 100) fail("a list of values");
+    // Hidden id fields are how features ask for exact rows (a tracker's students), so they allow more.
+    if (!Array.isArray(value) || value.length === 0 || value.length > (field.hidden ? 2000 : 100)) fail("a list of values");
     return (value as unknown[]).map(scalar);
   }
   if (op === "between") {

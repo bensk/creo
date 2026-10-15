@@ -288,12 +288,12 @@ Each phase ends with a short demo to leadership and a written check against exit
 ### Phase 2 — Cohorts, lists, trackers
 - [x] Groups and effective-dated memberships; homeroom/team/section management UI (Groups page, group and class pages, "Your classes" on Home; ops, leaders, and admins create interventions, advisories, clubs, and teams and change their students and staff; homeroom and grade team students come from the imports, so only their staff can be changed by hand)
 - [x] Static and dynamic lists (Lists page and list pages; "Save as list" in the student grid from the current filters or the ticked rows; sharing with people and Google Groups, limited by sensitivity; ADR 0008)
-- [ ] Query engine v1: sources, metrics, dimensions from students, attendance, behavior
-- [ ] Tracker creation flow: choose population (all / grade / group / list / filter, live or snapshot) → name + columns → share
-- [ ] "Track these students" entry points on group pages, list pages, and filtered grids
-- [ ] Computed columns, rule columns, tracker grid, Google Sheets export
-- [ ] Sharing with people and Google Groups; sensitivity inheritance enforced in the share dialog
-- [ ] Tracker templates
+- [ ] Query engine v1: sources, metrics, dimensions from students, attendance, behavior — students source with attendance, behavior, cohort (groups, classes), and custom fields done; metrics and dimensions (aggregates) arrive with dashboards
+- [x] Tracker creation flow: choose population (all / grade / group / list / filter, live or snapshot) → name + columns → share (sharing on the tracker page; ADR 0009)
+- [x] "Track these students" entry points on group pages, list pages, and filtered grids
+- [ ] Computed columns, rule columns, tracker grid, Google Sheets export — computed columns (with "counting from"), the keyboard tracker grid with per-cell compare-and-set, and CSV download done; rule columns (eligibility) and Google Sheets export (needs a Drive permission decision) to do; live updates between editors (SSE) to do
+- [x] Sharing with people and Google Groups; sensitivity inheritance enforced in the share dialog (ADR 0008)
+- [x] Tracker templates ("Save as template" keeps the columns; start from one on the Trackers page)
 - [ ] (AI, optional) "Describe the columns" box that pre-fills step 2
 - Exit: the next trip eligibility list and one intervention tracker run in the SIS with no companion spreadsheet, built by a grade team lead without AI.
 

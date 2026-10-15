@@ -54,6 +54,7 @@ export default async function ListPage({ params }: { params: Promise<{ id: strin
           {[list.kind === "dynamic" ? "updates itself from a filter" : "picked by hand", `${roster.length} students`, list.sensitivity !== "standard" ? `${list.sensitivity}: sharing is limited` : null, access === "view" ? "view only" : null, list.archivedAt ? "archived" : null]
             .filter(Boolean).join(" · ")}
         </p>
+        <p className="text-sm"><Link href={`/trackers/new?list=${list.id}`} className="text-link hover:underline">Track these students</Link></p>
         {spec && (
           <div className="flex flex-wrap items-center gap-2 text-sm">
             {spec.filters.map((f, i) => <span key={i} className="rounded-full border border-line-soft px-2 py-0.5">{describe(f, labels.get(f.field) ?? f.field)}</span>)}

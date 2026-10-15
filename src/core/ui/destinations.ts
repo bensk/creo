@@ -24,7 +24,7 @@ export const DESTINATIONS: readonly Destination[] = [
   { slug: "attendance", label: "Attendance", href: "/attendance", goKey: "a", arrivesIn: "Phase 3", summary: "Daily homeroom attendance, by keyboard or touch." },
   { slug: "behavior", label: "Behavior", href: "/behavior", goKey: "b", arrivesIn: "Phase 4", summary: "Behavior events, points, and restorative follow-ups." },
   { slug: "communication", label: "Communication", href: "/communication", goKey: "c", arrivesIn: "Phase 4", summary: "Calls, texts, emails, and meetings with families." },
-  { slug: "trackers", label: "Trackers", href: "/trackers", goKey: "t", arrivesIn: "Phase 2", summary: "Trip eligibility, interventions, and other trackers, without a spreadsheet." },
+  { slug: "trackers", label: "Trackers", href: "/trackers", goKey: "t", summary: "Trip eligibility, interventions, and other trackers, without a spreadsheet." },
   { slug: "dashboards", label: "Dashboards", href: "/dashboards", goKey: "d", arrivesIn: "Phase 6", summary: "Live dashboards built from the same data." },
   { slug: "lists", label: "Lists", href: "/lists", goKey: "l", summary: "Saved and live lists of students." },
   { slug: "change-log", label: "Change log", href: "/change-log", permission: "core.audit.read", summary: "Every change, who made it, and when." },

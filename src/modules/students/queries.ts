@@ -203,3 +203,11 @@ export async function currentlyEnrolled(db: Db, schoolId: string, studentIds: re
     .where(and(eq(enrollments.schoolId, schoolId), inArray(enrollments.studentId, [...studentIds]), eq(enrollments.status, "active"), isNull(enrollments.exitDate)));
   return new Set(rows.map((r) => r.id));
 }
+
+/** Currently enrolled students, optionally in one grade (a tracker's "everyone" or "grade N" population). */
+export async function enrolledStudentIds(db: Db, schoolId: string, grade?: number): Promise<string[]> {
+  const rows = await db.selectDistinct({ id: enrollments.studentId }).from(enrollments)
+    .where(and(eq(enrollments.schoolId, schoolId), eq(enrollments.status, "active"), isNull(enrollments.exitDate),
+      ...(grade ? [eq(enrollments.gradeLevel, grade)] : [])));
+  return rows.map((r) => r.id);
+}

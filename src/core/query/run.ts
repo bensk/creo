@@ -56,7 +56,7 @@ export async function fieldContext(db: Db, schoolId: string): Promise<FieldConte
 export async function describeSource(db: Db, viewer: Viewer, sourceId: string): Promise<CompiledColumn[]> {
   const { source, fields } = await sourceWithFields(sourceId, { db, ctx: await fieldContext(db, viewer.schoolId) });
   const access = queryAccess(viewer);
-  return fields.flatMap((f): CompiledColumn[] => {
+  return fields.filter((f) => !f.hidden).flatMap((f): CompiledColumn[] => {
     if (access.everyRow.has(f.sensitivity)) return [{ key: f.key, label: f.label, type: f.type, sensitivity: f.sensitivity, group: f.group, options: f.options, partial: false }];
     if (source.assigned && access.assignedRows.has(f.sensitivity)) return [{ key: f.key, label: f.label, type: f.type, sensitivity: f.sensitivity, group: f.group, options: f.options, partial: true }];
     return [];

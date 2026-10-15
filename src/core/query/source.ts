@@ -28,6 +28,8 @@ export interface FieldDef {
   sortBy?: (ctx: FieldContext) => SQL;
   options?: readonly string[];
   defaultVisible?: boolean;
+  /** Filterable in a spec but never offered in column pickers or filter menus (e.g. row ids). */
+  hidden?: boolean;
 }
 
 export interface SourceDef {
