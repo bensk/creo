@@ -58,7 +58,7 @@ export default async function TrackerPage({ params }: { params: Promise<{ id: st
         />
       )}
 
-      <TrackerGridLoader trackerId={tracker.id} columns={table.columns} initialRows={table.rows} editable={editable && !tracker.archivedAt} snapshot={tracker.populationKind === "snapshot"} />
+      <TrackerGridLoader trackerId={tracker.id} viewerUserId={viewer.userId} columns={table.columns} initialRows={table.rows} editable={editable && !tracker.archivedAt} snapshot={tracker.populationKind === "snapshot"} />
 
       <SharePanel
         shares={shareRows.map((s) => ({ id: s.id, name: s.name, googleGroupEmail: s.googleGroupEmail, access: s.access }))}

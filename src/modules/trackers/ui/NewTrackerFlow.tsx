@@ -8,15 +8,17 @@ import type { FieldSpec, Population } from "../model";
 type Kind = "live" | "snapshot";
 interface Choice { key: string; label: string; group: string; sensitivity: string; partial: boolean }
 
-const TYPE_LABEL: Record<FieldSpec["type"], string> = {
+type DraftType = Exclude<FieldSpec["type"], "rule">;
+type RuleSpec = Extract<FieldSpec, { type: "rule" }>;
+const TYPE_LABEL: Record<DraftType, string> = {
   boolean: "Yes / no", text: "Short text", long_text: "Long text", number: "Number", date: "Date",
   select: "One choice", multi_select: "Several choices", computed: "From student data",
 };
 const GROUP_TYPE: Record<string, string> = { homeroom: "Homerooms", grade_team: "Grade teams", advisory: "Advisories", intervention: "Interventions", club: "Clubs", team: "Teams", custom: "Other groups" };
 const field = "h-9 rounded-md border border-line bg-surface px-3 text-sm";
 
-type Draft = { type: FieldSpec["type"]; label: string; options: string; sensitivity: string; field: string; since: string };
-const toDraft = (f: FieldSpec): Draft => f.type === "computed"
+type Draft = { type: DraftType; label: string; options: string; sensitivity: string; field: string; since: string };
+const toDraft = (f: Exclude<FieldSpec, RuleSpec>): Draft => f.type === "computed"
   ? { type: "computed", label: f.label, options: "", sensitivity: "standard", field: f.field, since: f.since ?? "" }
   : { type: f.type, label: f.label, options: f.options.join(", "), sensitivity: f.sensitivity, field: "", since: "" };
 const fromDraft = (d: Draft): FieldSpec => d.type === "computed"
@@ -37,7 +39,11 @@ export function NewTrackerFlow({ initialPopulation, template, groups, lists, spe
   const [population, setPopulation] = useState<Population>(initialPopulation);
   const [preview, setPreview] = useState<{ count: number; sensitivity: string } | { error: string } | null>(null);
   const [name, setName] = useState(template ? template.name.replace(/\s*\(template\)$/i, "") : "");
-  const [drafts, setDrafts] = useState<Draft[]>(template ? template.fields.map(toDraft) : [{ type: "boolean", label: "", options: "", sensitivity: "standard", field: "", since: "" }]);
+  const [drafts, setDrafts] = useState<Draft[]>(template
+    ? template.fields.filter((f): f is Exclude<FieldSpec, RuleSpec> => f.type !== "rule").map(toDraft)
+    : [{ type: "boolean", label: "", options: "", sensitivity: "standard", field: "", since: "" }]);
+  // Rules from a template come along as they are; they're edited on the tracker itself.
+  const templateRules = (template?.fields ?? []).filter((f): f is RuleSpec => f.type === "rule");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const spec = initialPopulation.source === "spec" ? initialPopulation.spec : null;
@@ -120,7 +126,7 @@ export function NewTrackerFlow({ initialPopulation, template, groups, lists, spe
       onSubmit={(e) => {
         e.preventDefault();
         start(async () => {
-          const fields = drafts.filter((d) => d.label.trim()).map(fromDraft);
+          const fields = [...drafts.filter((d) => d.label.trim()).map(fromDraft), ...templateRules];
           const res = await createTrackerAction({ name, population, fields, templateId: template?.id ?? null });
           if (!res.ok) return setError(res.error);
           router.push(`/trackers/${res.data.id}`);
@@ -143,7 +149,7 @@ export function NewTrackerFlow({ initialPopulation, template, groups, lists, spe
               <span className="voice text-xs text-ink-muted">kind</span>
               <select aria-label={`Column ${i + 1} kind`} className={field} value={d.type}
                 onChange={(e) => update(i, { type: e.target.value as Draft["type"], field: e.target.value === "computed" ? (computedChoices[0]?.key ?? "") : "" })}>
-                {(Object.keys(TYPE_LABEL) as FieldSpec["type"][]).map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
+                {(Object.keys(TYPE_LABEL) as DraftType[]).map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
               </select>
             </label>
             {(d.type === "select" || d.type === "multi_select") && (
@@ -182,7 +188,10 @@ export function NewTrackerFlow({ initialPopulation, template, groups, lists, spe
         <div>
           <button type="button" className="h-9 rounded-md border border-line px-3 text-sm" onClick={() => setDrafts((ds) => [...ds, { type: "boolean", label: "", options: "", sensitivity: "standard", field: "", since: "" }])}>Add a column</button>
         </div>
-        <p className="voice text-xs text-ink-muted">columns can be added and removed later too.</p>
+        {templateRules.map((r) => (
+          <p key={r.label} className="text-sm"><span className="font-medium">{r.label}</span> <span className="voice text-xs text-ink-muted">yes/no rule from the template</span></p>
+        ))}
+        <p className="voice text-xs text-ink-muted">columns can be added and removed later too. yes/no rules (e.g. “eligible”) are added on the tracker, once the columns they check exist.</p>
       </fieldset>
       {error && <p role="alert" className="rounded-md border-2 border-crimson bg-surface-raised px-3 py-2 text-sm">{error}</p>}
       <div className="flex gap-2">

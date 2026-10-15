@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { sensitiveReads } from "@/core/audit/schema";
 import type { StaffViewer } from "@/core/auth/viewer";
 import type { Db } from "@/core/db/types";
@@ -7,6 +7,7 @@ import { describeSource, runQuery } from "@/core/query/run";
 import { levelsEverywhere } from "@/core/sharing/access";
 import { rosterFor } from "../students/queries";
 import type { TrackerRow } from "./model";
+import { evaluateRule, isStoredRule, type StoredRule } from "./rules";
 import { trackerFields, trackerRows } from "./schema";
 
 export interface TrackerColumn {
@@ -18,6 +19,8 @@ export interface TrackerColumn {
   editable: boolean;
   /** Blank for some students because the viewer can't see this field for them (computed, assigned-only). */
   partial: boolean;
+  /** For rule columns: the conditions, so the grid can re-check after an edit. */
+  rule?: StoredRule;
 }
 
 export interface TrackerTableRow {
@@ -28,6 +31,8 @@ export interface TrackerTableRow {
   grade: number | null;
   phonetic: string | null;
   values: Record<string, unknown>;
+  /** For rule columns that came out "no": the conditions not met. */
+  missing: Record<string, string[]>;
 }
 
 /**
@@ -35,16 +40,22 @@ export interface TrackerTableRow {
  * the query engine as the viewer; typed columns above standard sensitivity
  * are shown only to the owner and to roles that see that level everywhere.
  */
-export async function loadTrackerTable(db: Db, viewer: StaffViewer, tracker: TrackerRow, editable: boolean): Promise<{ columns: TrackerColumn[]; rows: TrackerTableRow[] }> {
+export async function loadTrackerTable(
+  db: Db, viewer: StaffViewer, tracker: TrackerRow, editable: boolean, onlyRowIds?: readonly string[],
+): Promise<{ columns: TrackerColumn[]; rows: TrackerTableRow[] }> {
   const fields = await db.select().from(trackerFields).where(and(eq(trackerFields.trackerId, tracker.id), isNull(trackerFields.archivedAt))).orderBy(asc(trackerFields.position));
-  const rows = await db.select().from(trackerRows).where(and(eq(trackerRows.trackerId, tracker.id), isNull(trackerRows.archivedOn)));
+  const rows = await db.select().from(trackerRows).where(and(
+    eq(trackerRows.trackerId, tracker.id), isNull(trackerRows.archivedOn),
+    ...(onlyRowIds ? [inArray(trackerRows.id, onlyRowIds.length ? [...onlyRowIds] : ["00000000-0000-0000-0000-000000000000"])] : []),
+  ));
   const ids = rows.map((r) => r.studentId);
   const roster = new Map((await rosterFor(db, viewer.schoolId, ids)).map((r) => [r.id, r]));
 
   const levels = levelsEverywhere(viewer.roles);
   const isOwner = tracker.ownerStaffId === viewer.staffId;
   const visibleManual = fields.filter((f) => f.type !== "computed" && (f.sensitivity === "standard" || isOwner || levels.has(f.sensitivity as Sensitivity)));
-  const computed = fields.filter((f) => f.type === "computed");
+  const rules = fields.filter((f) => isStoredRule(f.computed));
+  const computed = fields.filter((f) => f.type === "computed" && !isStoredRule(f.computed));
 
   // Computed values: one query per "since" date, run as the viewer.
   const computedValues = new Map<string, Map<string, unknown>>(); // field key → student → value
@@ -77,10 +88,17 @@ export async function loadTrackerTable(db: Db, viewer: StaffViewer, tracker: Tra
     })));
   }
 
+  // A rule shows only if the viewer can see every column it checks; it's partial if any of them is.
+  const shownKeys = new Set([...visibleManual.map((f) => f.key), ...computedValues.keys()]);
+  const shownRules = rules.filter((f) => isStoredRule(f.computed) && f.computed.all.every((c) => shownKeys.has(c.column)));
+  for (const r of shownRules) if (isStoredRule(r.computed) && r.computed.all.some((c) => partial.has(c.column))) partial.add(r.key);
+  const labels = Object.fromEntries(fields.map((f) => [f.key, f.label]));
+
   const columns: TrackerColumn[] = [
-    ...fields.filter((f) => visibleManual.includes(f) || computedValues.has(f.key)).map((f) => ({
-      key: f.key, label: f.label, type: f.type, options: f.options, sensitivity: f.sensitivity as Sensitivity,
+    ...fields.filter((f) => shownKeys.has(f.key) || shownRules.includes(f)).map((f) => ({
+      key: f.key, label: f.label, type: isStoredRule(f.computed) ? "rule" : f.type, options: f.options, sensitivity: f.sensitivity as Sensitivity,
       editable: editable && f.type !== "computed" && !tracker.archivedAt, partial: partial.has(f.key),
+      ...(isStoredRule(f.computed) ? { rule: f.computed } : {}),
     })),
   ];
   const out: TrackerTableRow[] = rows.flatMap((r) => {
@@ -88,9 +106,19 @@ export async function loadTrackerTable(db: Db, viewer: StaffViewer, tracker: Tra
     if (!s) return [];
     const data = r.data as Record<string, unknown>;
     const values: Record<string, unknown> = {};
-    for (const c of columns) values[c.key] = c.type === "computed" ? (computedValues.get(c.key)?.get(r.studentId) ?? null) : (data[c.key] ?? null);
+    for (const c of columns) {
+      if (c.type === "rule") continue;
+      values[c.key] = c.type === "computed" ? (computedValues.get(c.key)?.get(r.studentId) ?? null) : (data[c.key] ?? null);
+    }
+    const missing: Record<string, string[]> = {};
+    for (const rule of shownRules) {
+      if (!isStoredRule(rule.computed)) continue;
+      const result = evaluateRule(rule.computed, values, labels);
+      values[rule.key] = result.pass;
+      if (!result.pass) missing[rule.key] = result.missing;
+    }
     return [{
-      rowId: r.id, version: r.version, studentId: r.studentId, grade: s.grade, phonetic: s.phonetic, values,
+      rowId: r.id, version: r.version, studentId: r.studentId, grade: s.grade, phonetic: s.phonetic, values, missing,
       name: { legalFirstName: s.legalFirstName, legalLastName: s.legalLastName, preferredFirstName: s.preferredFirstName, preferredLastName: s.preferredLastName },
     }];
   }).sort((a, b) => `${a.name.legalLastName} ${a.name.legalFirstName}`.localeCompare(`${b.name.legalLastName} ${b.name.legalFirstName}`));

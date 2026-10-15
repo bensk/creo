@@ -1,5 +1,6 @@
 import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { recordAudit } from "@/core/audit/record";
+import { notifyChange } from "@/core/realtime";
 import { staff } from "@/core/auth/schema";
 import { loadViewer, type StaffViewer } from "@/core/auth/viewer";
 import type { Db } from "@/core/db/types";
@@ -77,6 +78,7 @@ export async function syncLiveRows(db: Db, tracker: TrackerRow, asViewer: StaffV
       .onConflictDoNothing();
   }
   if (toAdd.length || toRestore.length || toArchive.length) {
+    await notifyChange(db, { kind: "tracker", id: tracker.id, rowIds: [], by: actorUserId });
     await recordAudit(db, {
       schoolId: tracker.schoolId, actorUserId, action: "tracker.population_sync", entity: "trackers", entityId: tracker.id,
       after: { added: toAdd.length, restored: toRestore.length, archived: toArchive.length }, via: "system",

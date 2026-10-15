@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { SENSITIVITY_LEVELS } from "@/core/permissions/sensitivity";
 import { querySpecSchema } from "@/core/query/spec";
+import { ruleFieldSchema } from "./rules";
 import type { trackerFields, trackers } from "./schema";
 
 export type TrackerRow = typeof trackers.$inferSelect;
@@ -38,8 +39,8 @@ export const computedFieldSchema = z.object({
   since: z.iso.date().nullable().default(null),
 });
 
-/** A column as someone defines it: typed and filled in by staff, or computed from a student field. */
-export const fieldSpecSchema = z.union([computedFieldSchema, manualFieldSchema]);
+/** A column as someone defines it: typed and filled in by staff, computed from a student field, or a yes/no rule over other columns. */
+export const fieldSpecSchema = z.union([computedFieldSchema, ruleFieldSchema, manualFieldSchema]);
 export type FieldSpec = z.infer<typeof fieldSpecSchema>;
 
 export function populationOf(t: TrackerRow): Population {

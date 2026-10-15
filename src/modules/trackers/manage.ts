@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { Refused, runStaffAction, type ActionContext } from "@/core/actions/run";
 import type { StaffViewer } from "@/core/auth/viewer";
@@ -8,12 +8,14 @@ import { Forbidden, highestLevel } from "@/core/permissions";
 import type { Sensitivity } from "@/core/permissions/sensitivity";
 import { fieldContext, sourceWithFields } from "@/core/query/run";
 import { schoolYears } from "@/core/school/schema";
+import { notifyChange } from "@/core/realtime";
 import { shareTargetProblem } from "@/core/sharing/access";
 import { sharesOf } from "@/core/sharing/manage";
 import { currentlyEnrolled } from "../students/queries";
 import { asShareable, canEdit, getTracker } from "./access";
 import { fieldSpecSchema, MAX_ROWS, populationOf, populationSchema, type FieldSpec, type Result, type TrackerRow } from "./model";
 import { resolvePopulation } from "./population";
+import { isStoredRule, NEEDS_VALUE, type StoredRule } from "./rules";
 import { trackerFields, trackerRows, trackers, trackerTemplates } from "./schema";
 
 // Making and changing trackers. Any staff member can make one; it's private
@@ -30,8 +32,25 @@ async function wrap<T>(work: () => Promise<Result<T>>, forbidden = "You can't ch
   }
 }
 
-/** The sensitivity of a column: chosen for typed columns, the student field's for computed ones. */
-async function fieldSensitivity(db: Db, schoolId: string, f: FieldSpec): Promise<Sensitivity> {
+/** Other columns a rule may refer to, by key. */
+type ColumnIndex = Map<string, { label: string; sensitivity: Sensitivity; isRule: boolean }>;
+
+/**
+ * The sensitivity of a column: chosen for typed columns, the student field's
+ * for computed ones, and the highest of the columns a rule checks.
+ */
+async function fieldSensitivity(db: Db, schoolId: string, f: FieldSpec, others: ColumnIndex): Promise<Sensitivity> {
+  if (f.type === "rule") {
+    const levels: Sensitivity[] = [];
+    for (const c of f.all) {
+      const col = others.get(c.column);
+      if (!col) throw new Refused(`“${f.label}” checks a column that doesn't exist.`);
+      if (col.isRule) throw new Refused(`“${f.label}” can't check another rule (“${col.label}”).`);
+      if (NEEDS_VALUE.has(c.op) && (c.value === null || c.value === "")) throw new Refused(`“${f.label}”: add a value for “${col.label}”.`);
+      levels.push(col.sensitivity);
+    }
+    return highestLevel(levels);
+  }
   if (f.type !== "computed") return f.sensitivity;
   const { fields } = await sourceWithFields("students", { db, ctx: await fieldContext(db, schoolId) });
   const def = fields.find((d) => d.key === f.field && !d.hidden);
@@ -51,9 +70,16 @@ async function checkSharesStillAllowed(tx: Db, tracker: TrackerRow, next: Sensit
 }
 
 function fieldRow(f: FieldSpec, key: string, sensitivity: Sensitivity, position: number) {
+  if (f.type === "rule") return { key, label: f.label, type: "computed", options: [], computed: { kind: "rule", all: f.all } satisfies StoredRule, sensitivity, position };
   return f.type === "computed"
     ? { key, label: f.label, type: "computed", options: [], computed: { field: f.field, since: f.since }, sensitivity, position }
     : { key, label: f.label, type: f.type, options: f.type === "select" || f.type === "multi_select" ? f.options : [], computed: null, sensitivity, position };
+}
+
+/** The columns a tracker has now, for rules to refer to. */
+async function columnIndex(tx: Db, trackerId: string): Promise<ColumnIndex> {
+  const rows = await tx.select().from(trackerFields).where(and(eq(trackerFields.trackerId, trackerId), isNull(trackerFields.archivedAt)));
+  return new Map(rows.map((r) => [r.key, { label: r.label, sensitivity: r.sensitivity as Sensitivity, isRule: isStoredRule(r.computed) }]));
 }
 
 export const trackerInput = z.object({
@@ -71,13 +97,24 @@ export async function createTracker(db: Db, viewer: StaffViewer, input: z.input<
     if (!resolved.ok) throw new Refused(resolved.error);
     if (resolved.studentIds.length > MAX_ROWS) throw new Refused(`A tracker can have up to ${MAX_ROWS} students.`);
     const labels = new Set<string>();
-    const fieldLevels: Sensitivity[] = [];
+    const keys: string[] = [];
     for (const f of t.fields) {
       if (labels.has(f.label.toLowerCase())) throw new Refused(`Two columns are called “${f.label}”.`);
       labels.add(f.label.toLowerCase());
       if ((f.type === "select" || f.type === "multi_select") && f.options.length === 0) throw new Refused(`“${f.label}” needs at least one option.`);
-      fieldLevels.push(await fieldSensitivity(tx, viewer.schoolId, f));
+      let key = keyFromLabel(f.label);
+      for (let n = 2; keys.includes(key); n++) key = `${keyFromLabel(f.label)}_${n}`;
+      keys.push(key);
     }
+    // Typed and computed columns first, so rules can refer to them by key.
+    const index: ColumnIndex = new Map();
+    const fieldLevels: Sensitivity[] = new Array(t.fields.length);
+    for (const [i, f] of t.fields.entries()) {
+      if (f.type === "rule") continue;
+      fieldLevels[i] = await fieldSensitivity(tx, viewer.schoolId, f, index);
+      index.set(keys[i]!, { label: f.label, sensitivity: fieldLevels[i]!, isRule: false });
+    }
+    for (const [i, f] of t.fields.entries()) if (f.type === "rule") fieldLevels[i] = await fieldSensitivity(tx, viewer.schoolId, f, index);
     const sensitivity = highestLevel([resolved.sensitivity, ...fieldLevels]);
     const { today } = await fieldContext(tx, viewer.schoolId);
     const [year] = await tx.select({ id: schoolYears.id }).from(schoolYears)
@@ -92,13 +129,7 @@ export async function createTracker(db: Db, viewer: StaffViewer, input: z.input<
     }).returning({ id: trackers.id });
     const id = row!.id;
     if (t.fields.length) {
-      const used = new Set<string>();
-      await tx.insert(trackerFields).values(t.fields.map((f, i) => {
-        let key = keyFromLabel(f.label);
-        while (used.has(key)) key = `${key}_${i}`;
-        used.add(key);
-        return { schoolId: viewer.schoolId, createdBy: viewer.userId, trackerId: id, ...fieldRow(f, key, fieldLevels[i]!, i) };
-      }));
+      await tx.insert(trackerFields).values(t.fields.map((f, i) => ({ schoolId: viewer.schoolId, createdBy: viewer.userId, trackerId: id, ...fieldRow(f, keys[i]!, fieldLevels[i]!, i) })));
     }
     if (resolved.studentIds.length) {
       await tx.insert(trackerRows).values(resolved.studentIds.map((studentId) => ({ schoolId: viewer.schoolId, createdBy: viewer.userId, trackerId: id, studentId, addedOn: today })));
@@ -135,13 +166,14 @@ export async function addTrackerField(db: Db, viewer: StaffViewer, input: z.inpu
     const existing = await tx.select({ key: trackerFields.key, label: trackerFields.label, position: trackerFields.position }).from(trackerFields).where(eq(trackerFields.trackerId, tracker.id));
     if (existing.some((e) => e.label.toLowerCase() === a.field.label.toLowerCase())) throw new Refused(`There's already a column called “${a.field.label}”.`);
     if ((a.field.type === "select" || a.field.type === "multi_select") && a.field.options.length === 0) throw new Refused("Add at least one option.");
-    const sensitivity = await fieldSensitivity(tx, viewer.schoolId, a.field);
+    const sensitivity = await fieldSensitivity(tx, viewer.schoolId, a.field, await columnIndex(tx, tracker.id));
     await refreshSensitivity(tx, viewer, tracker, [sensitivity]);
     let key = keyFromLabel(a.field.label);
     const keys = new Set(existing.map((e) => e.key));
     for (let n = 2; keys.has(key); n++) key = `${keyFromLabel(a.field.label)}_${n}`;
     const position = Math.max(-1, ...existing.map((e) => e.position)) + 1;
     await tx.insert(trackerFields).values({ schoolId: viewer.schoolId, createdBy: viewer.userId, trackerId: tracker.id, ...fieldRow(a.field, key, sensitivity, position) });
+    await notifyChange(tx, { kind: "tracker", id: tracker.id, rowIds: [], by: viewer.userId });
     await audit({ action: "tracker.field_add", entity: "trackers", entityId: tracker.id, after: { key, label: a.field.label, type: a.field.type, sensitivity } });
     return { ok: true as const, data: { key } };
   }, input));
@@ -150,10 +182,15 @@ export async function addTrackerField(db: Db, viewer: StaffViewer, input: z.inpu
 export async function archiveTrackerField(db: Db, viewer: StaffViewer, input: { trackerId: string; key: string }): Promise<Result<null>> {
   return wrap(() => runStaffAction(db, viewer, { permission: "trackers.create", input: z.object({ trackerId: z.uuid(), key: z.string().min(1).max(80) }) }, async (ctx) => {
     const tracker = await editable(ctx, ctx.input.trackerId);
+    const active = await ctx.tx.select({ label: trackerFields.label, computed: trackerFields.computed }).from(trackerFields)
+      .where(and(eq(trackerFields.trackerId, tracker.id), isNull(trackerFields.archivedAt)));
+    const usedBy = active.filter((r) => isStoredRule(r.computed) && r.computed.all.some((c) => c.column === ctx.input.key)).map((r) => r.label);
+    if (usedBy.length) throw new Refused(`“${usedBy.join("”, “")}” checks this column. Remove that rule first.`);
     const [f] = await ctx.tx.update(trackerFields).set({ archivedAt: new Date() })
       .where(and(eq(trackerFields.trackerId, tracker.id), eq(trackerFields.key, ctx.input.key))).returning({ id: trackerFields.id });
     if (!f) throw new Refused("That column wasn't found.");
     await refreshSensitivity(ctx.tx, viewer, tracker);
+    await notifyChange(ctx.tx, { kind: "tracker", id: tracker.id, rowIds: [], by: viewer.userId });
     await ctx.audit({ action: "tracker.field_archive", entity: "trackers", entityId: tracker.id, after: { key: ctx.input.key } });
     return { ok: true as const, data: null };
   }, input));
@@ -194,6 +231,7 @@ export async function setTrackerCell(db: Db, viewer: StaffViewer, input: z.input
       .where(and(eq(trackerRows.id, row.id), sql`coalesce(${trackerRows.data} -> ${c.key}, 'null'::jsonb) = ${JSON.stringify(c.expected ?? null)}::jsonb`))
       .returning({ version: trackerRows.version });
     if (!after) throw new Refused(`Someone else just changed “${field.label}” for this student. Reload to see their change.`);
+    await notifyChange(tx, { kind: "tracker", id: tracker.id, rowIds: [row.id], by: viewer.userId });
     const shown = field.sensitivity === "standard";
     await audit({
       action: "tracker.cell_set", entity: "tracker_rows", entityId: row.id,
@@ -219,6 +257,7 @@ export async function addTrackerRows(db: Db, viewer: StaffViewer, input: z.input
     if (!restore.length && !fresh.length) throw new Refused("Those students are already on the tracker, or aren't enrolled.");
     if (restore.length) await ctx.tx.update(trackerRows).set({ archivedOn: null }).where(inArray(trackerRows.id, restore));
     if (fresh.length) await ctx.tx.insert(trackerRows).values(fresh.map((studentId) => ({ schoolId: viewer.schoolId, createdBy: viewer.userId, trackerId: tracker.id, studentId, addedOn: today })));
+    await notifyChange(ctx.tx, { kind: "tracker", id: tracker.id, rowIds: [], by: viewer.userId });
     await ctx.audit({ action: "tracker.rows_add", entity: "trackers", entityId: tracker.id, after: { studentIds: [...fresh, ...existing.filter((e) => restore.includes(e.id)).map((e) => e.studentId)] } });
     return { ok: true as const, data: { added: restore.length + fresh.length } };
   }, input));
@@ -233,6 +272,7 @@ export async function removeTrackerRow(db: Db, viewer: StaffViewer, input: { tra
     const [row] = await ctx.tx.update(trackerRows).set({ archivedOn: today })
       .where(and(eq(trackerRows.id, ctx.input.rowId), eq(trackerRows.trackerId, tracker.id))).returning({ studentId: trackerRows.studentId });
     if (!row) throw new Refused("That row wasn't found.");
+    await notifyChange(ctx.tx, { kind: "tracker", id: tracker.id, rowIds: [], by: viewer.userId });
     await ctx.audit({ action: "tracker.row_remove", entity: "trackers", entityId: tracker.id, after: { studentId: row.studentId } });
     return { ok: true as const, data: null };
   }, input));
@@ -247,6 +287,7 @@ export async function updateTracker(db: Db, viewer: StaffViewer, input: z.input<
     if (!canEdit(found.access)) throw new Refused("You can view this tracker but not change it.");
     const t = found.tracker;
     await tx.update(trackers).set({ name: u.name, description: u.description, archivedAt: u.archived ? (t.archivedAt ?? new Date()) : null }).where(eq(trackers.id, t.id));
+    await notifyChange(tx, { kind: "tracker", id: t.id, rowIds: [], by: viewer.userId });
     await audit({ action: "tracker.update", entity: "trackers", entityId: t.id, before: { name: t.name, archived: Boolean(t.archivedAt) }, after: { name: u.name, archived: u.archived } });
     return { ok: true as const, data: null };
   }, input));
@@ -260,9 +301,11 @@ export async function saveTrackerTemplate(db: Db, viewer: StaffViewer, input: z.
     const found = await getTracker(tx, viewer, t.trackerId);
     if (!found) throw new Refused("That tracker wasn't found.");
     const fields = await tx.select().from(trackerFields).where(and(eq(trackerFields.trackerId, found.tracker.id))).orderBy(asc(trackerFields.position));
-    const specs: FieldSpec[] = fields.filter((f) => !f.archivedAt).map((f) => f.type === "computed"
-      ? { type: "computed", label: f.label, field: (f.computed as { field: string }).field, since: (f.computed as { since: string | null }).since }
-      : { type: f.type as Exclude<FieldSpec["type"], "computed">, label: f.label, options: f.options, sensitivity: f.sensitivity as Sensitivity });
+    const specs: FieldSpec[] = fields.filter((f) => !f.archivedAt).map((f): FieldSpec => {
+      if (isStoredRule(f.computed)) return { type: "rule", label: f.label, all: f.computed.all };
+      if (f.type === "computed") return { type: "computed", label: f.label, field: (f.computed as { field: string }).field, since: (f.computed as { since: string | null }).since };
+      return { type: f.type as Exclude<FieldSpec["type"], "computed" | "rule">, label: f.label, options: f.options, sensitivity: f.sensitivity as Sensitivity };
+    });
     const pop = populationOf(found.tracker);
     // Group and list populations are specific to a year; the template keeps the kind of population only.
     const population = pop.source === "group" || pop.source === "list" ? null : pop;
