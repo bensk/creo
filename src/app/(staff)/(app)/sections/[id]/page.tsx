@@ -31,6 +31,7 @@ export default async function SectionPage({ params }: { params: Promise<{ id: st
             .filter(Boolean).join(" · ")}
         </p>
         <p className="text-sm">{teachers.map((t) => `${t.name}${t.role === "co_teacher" ? " (co-teacher)" : ""}`).join(", ") || "No teacher yet"}</p>
+        <p className="text-sm"><Link href={`/students?section=${section.id}`} className="text-link hover:underline">Open in the student grid</Link></p>
         <p className="voice text-xs text-ink-muted">classes come from the clever import.</p>
       </header>
       <section aria-labelledby="students-h" className="grid gap-2">

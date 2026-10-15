@@ -3,7 +3,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { fakeDirectory } from "../../../tests/helpers/fake-directory";
 import { withSeed } from "../../../tests/helpers/db";
 import { auditLog } from "../audit/schema";
-import { staff, staffRoles } from "../auth/schema";
+import { directoryGroupMembers, staff, staffRoles } from "../auth/schema";
 import { getSql } from "../db/client";
 import type { Db } from "../db/types";
 import { schools, users } from "../identity/schema";
@@ -79,8 +79,19 @@ describe("syncStaffFromDirectory", () => {
       const id = await schoolId(tx);
       await syncStaffFromDirectory(tx, directory(), { schoolId: id, today: TODAY });
       expect(await syncStaffFromDirectory(tx, directory(), { schoolId: id, today: TODAY })).toEqual({
-        created: 0, updated: 0, deactivated: 0, rolesAdded: 0, rolesEnded: 0,
+        created: 0, updated: 0, deactivated: 0, rolesAdded: 0, rolesEnded: 0, groupsRefreshed: expect.any(Number),
       });
+    });
+  });
+
+  it("stores who is in each group that roles map from, for group shares", async () => {
+    await withSeed(async (tx) => {
+      await syncStaffFromDirectory(tx, directory(), { schoolId: await schoolId(tx), today: TODAY });
+      const members = await tx.select({ email: staff.email }).from(directoryGroupMembers)
+        .innerJoin(staff, eq(staff.id, directoryGroupMembers.staffId))
+        .where(eq(directoryGroupMembers.googleGroupEmail, "teachers@creoprep.org"));
+      // Staff only: the student account in the group isn't stored.
+      expect(members.map((m) => m.email).sort()).toEqual(["jordan.reyes@creoprep.org", "new.hire@creoprep.org"]);
     });
   });
 

@@ -4,6 +4,7 @@ import { roleGroupMappings, staff, staffRoles } from "../auth/schema";
 import type { StaffRole } from "../db/columns";
 import type { Db } from "../db/types";
 import { users } from "../identity/schema";
+import { groupsToSync, refreshGroupMembers } from "../sharing/groups";
 import { isStudentOrgUnit, type Directory, type DirectoryUser } from "./directory";
 
 // Nightly Directory sync (`pnpm directory:sync`, run as a Cloud Run job):
@@ -20,6 +21,8 @@ export interface SyncSummary {
   deactivated: number;
   rolesAdded: number;
   rolesEnded: number;
+  /** Google Groups whose members were read (role mappings and share targets). */
+  groupsRefreshed: number;
 }
 
 const SYNC_USER_NAME = "Google Directory sync";
@@ -56,7 +59,7 @@ export async function syncStaffFromDirectory(
   const actor = await syncUserIdFor(db, schoolId);
   const audit = (action: string, entity: string, entityId: string, before: unknown, after: unknown) =>
     recordAudit(db, { schoolId, actorUserId: actor, action, entity, entityId, before, after, via: "system" });
-  const summary: SyncSummary = { created: 0, updated: 0, deactivated: 0, rolesAdded: 0, rolesEnded: 0 };
+  const summary: SyncSummary = { created: 0, updated: 0, deactivated: 0, rolesAdded: 0, rolesEnded: 0, groupsRefreshed: 0 };
 
   // 1. Who should be staff, and which roles their groups give them.
   const directoryStaff = new Map<string, DirectoryUser>();
@@ -175,6 +178,9 @@ export async function syncStaffFromDirectory(
       summary.rolesAdded++;
     }
   }
+
+  // 4. Members of the Google Groups that roles and shares point at.
+  summary.groupsRefreshed = await refreshGroupMembers(db, directory, schoolId, actor, await groupsToSync(db, schoolId));
 
   return summary;
 }
