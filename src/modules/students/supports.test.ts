@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { studentIdByName, viewerFor, withSeed } from "../../../tests/helpers/db";
 import { sensitiveReads } from "@/core/audit/schema";
@@ -21,7 +21,8 @@ describe("supports", () => {
         .select({ studentId: groupMemberships.studentId })
         .from(groupMemberships)
         .innerJoin(groups, eq(groups.id, groupMemberships.groupId))
-        .where(eq(groups.name, "Syracuse"));
+        // Current members only: a student who has left Syracuse isn't the teacher's anymore.
+        .where(and(eq(groups.name, "Syracuse"), isNull(groupMemberships.endsOn)));
       let found = false;
       for (const { studentId } of syracuse) {
         const rows = await supportsForStudent(tx, studentId);
