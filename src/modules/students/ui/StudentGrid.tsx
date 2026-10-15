@@ -24,7 +24,7 @@ import { useShortcut } from "@/core/ui/keyboard/KeyboardProvider";
 import {
   bulkUpdateStudentsAction, deleteStudentViewAction, queryStudentsAction, saveStudentViewAction, updateStudentCellAction,
 } from "../grid-actions";
-import { readGridTheme } from "./grid-theme";
+import { readGridTheme } from "@/core/ui/grid-theme";
 
 export interface SavedView {
   id: string;
@@ -228,6 +228,20 @@ export function StudentGrid({
           </ToolbarButton>
         )}
         <ToolbarButton active={panel === "list"} onClick={() => setPanel(panel === "list" ? null : "list")}>Save as list</ToolbarButton>
+        <button
+          type="button"
+          disabled={Boolean(spec.search)}
+          title={spec.search ? "Clear the name search first: trackers follow filters, and names don't go in links." : undefined}
+          onClick={() => {
+            // Only the filters (field names and values) travel in the link, never a name search.
+            const json = JSON.stringify({ filters: spec.filters ?? [] });
+            const encoded = btoa(String.fromCharCode(...new TextEncoder().encode(json))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+            router.push(`/trackers/new?spec=${encoded}`);
+          }}
+          className="flex h-9 items-center rounded-md border border-line px-3 text-sm disabled:opacity-50"
+        >
+          Track these students
+        </button>
         {canManageFields && (
           <Link href="/students/fields" className="flex h-9 items-center rounded-md px-2 text-sm text-link hover:underline">Fields</Link>
         )}

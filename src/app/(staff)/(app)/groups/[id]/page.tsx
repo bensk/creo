@@ -44,7 +44,10 @@ export default async function GroupPage({ params }: { params: Promise<{ id: stri
         <p className="voice text-sm text-ink-muted">
           {[TYPE[group.type] ?? group.type, group.gradeLevel ? `grade ${group.gradeLevel}` : null, `${current.length} students`, group.archivedAt ? "archived" : null].filter(Boolean).join(" · ")}
         </p>
-        <p className="text-sm"><Link href={`/students?group=${group.id}`} className="text-link hover:underline">Open in the student grid</Link></p>
+        <p className="flex flex-wrap gap-4 text-sm">
+          <Link href={`/students?group=${group.id}`} className="text-link hover:underline">Open in the student grid</Link>
+          <Link href={`/trackers/new?group=${group.id}`} className="text-link hover:underline">Track these students</Link>
+        </p>
         {importManaged && <p className="voice text-xs text-ink-muted">students come from the imports. staff can be changed here.</p>}
       </header>
 

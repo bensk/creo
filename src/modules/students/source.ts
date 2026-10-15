@@ -73,6 +73,10 @@ const currentSupport = (type: string) => (ctx: { today: string }) =>
 
 export const studentFields: FieldDef[] = [
   {
+    // For finding exact students (a tracker's rows); never shown.
+    key: "id", label: "Student ID", type: "text", sensitivity: "standard", group: "Student", hidden: true, select: () => sql`s.id::text`,
+  },
+  {
     key: "name", label: "Name", type: "text", sensitivity: "standard", group: "Student", defaultVisible: true,
     select: () => sql`coalesce(${s("preferred_first_name")}, ${s("legal_first_name")}) || ' ' || coalesce(${s("preferred_last_name")}, ${s("legal_last_name")})`,
     sortBy: () => sql`lower(coalesce(${s("preferred_last_name")}, ${s("legal_last_name")}) || ' ' || coalesce(${s("preferred_first_name")}, ${s("legal_first_name")}))`,
