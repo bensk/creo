@@ -7,6 +7,9 @@ import { getSql } from "@/core/db/client";
 import type { Db } from "@/core/db/types";
 import { fieldContext } from "@/core/query/run";
 import { groups } from "../cohorts/schema";
+import { clearSchoolDay, dayInfo, setSchoolDay } from "./calendar";
+import { updateCode } from "./codes";
+import { lateArrivals, signInLate } from "./desk";
 import { activeCodes, attendanceProgress, homeroomDay, homeroomsFor, markAttendance } from "./take";
 
 afterAll(async () => {
@@ -74,6 +77,53 @@ describe("taking attendance", () => {
       expect((await homeroomsFor(tx, ops)).homerooms.length).toBeGreaterThan(10);
       const progress = await attendanceProgress(tx, ops.schoolId, earlier);
       expect(progress.find((p) => p.id === syracuse)?.students).toBeGreaterThan(0);
+    });
+  });
+});
+
+describe("calendar, late desk, and codes", () => {
+  it("a day off blocks attendance until it's cleared", async () => {
+    await withSeed(async (tx) => {
+      const ops = await as(tx, OPS);
+      const { today } = await fieldContext(tx, ops.schoolId);
+      const day = weekdayOnOrBefore(today, 2);
+      const codes = new Map((await activeCodes(tx, ops.schoolId)).map((c) => [c.code, c.id]));
+      const syracuse = await homeroom(tx, "Syracuse");
+      const cami = await studentIdByName(tx, "Camila", "Martinez");
+      expect(await setSchoolDay(tx, ops, { date: day, isInstructional: false, dayType: "other", note: "Snow day" })).toEqual({ ok: true, data: null });
+      expect(await dayInfo(tx, ops.schoolId, day)).toEqual({ isSchoolDay: false, kind: "other", note: "Snow day" });
+      expect(await markAttendance(tx, ops, { groupId: syracuse, date: day, marks: [{ studentId: cami, codeId: codes.get("P")! }] }))
+        .toEqual({ ok: false, error: "That isn't a school day (Snow day)." });
+      expect(await clearSchoolDay(tx, ops, day)).toEqual({ ok: true, data: null });
+      expect((await markAttendance(tx, ops, { groupId: syracuse, date: day, marks: [{ studentId: cami, codeId: codes.get("P")! }] })).ok).toBe(true);
+      expect(await setSchoolDay(tx, await as(tx, TEACHER), { date: day, isInstructional: false, dayType: "other", note: null })).toMatchObject({ ok: false });
+    });
+  });
+
+  it("the late desk turns absent into tardy with the arrival time, once", async () => {
+    await withSeed(async (tx) => {
+      const ops = await as(tx, OPS);
+      const { today } = await fieldContext(tx, ops.schoolId);
+      if (!(await dayInfo(tx, ops.schoolId, today)).isSchoolDay) return;
+      const codes = new Map((await activeCodes(tx, ops.schoolId)).map((c) => [c.code, c.id]));
+      const syracuse = await homeroom(tx, "Syracuse");
+      const cami = await studentIdByName(tx, "Camila", "Martinez");
+      await markAttendance(tx, ops, { groupId: syracuse, date: today, marks: [{ studentId: cami, codeId: codes.get("A")! }] });
+      const signed = await signInLate(tx, ops, cami);
+      expect(signed.ok).toBe(true);
+      expect((await homeroomDay(tx, ops.schoolId, syracuse, today)).marks.get(cami)?.codeId).toBe(codes.get("T"));
+      expect((await lateArrivals(tx, ops.schoolId, today)).map((a) => a.studentId)).toContain(cami);
+      expect(await signInLate(tx, ops, cami)).toEqual({ ok: false, error: "They already signed in today." });
+      expect(await signInLate(tx, await as(tx, TEACHER), cami)).toMatchObject({ ok: false, error: /late desk is for ops/ });
+    });
+  });
+
+  it("ops set a code's SIRS code", async () => {
+    await withSeed(async (tx) => {
+      const ops = await as(tx, OPS);
+      const [present] = (await activeCodes(tx, ops.schoolId)).filter((c) => c.code === "P");
+      expect(await updateCode(tx, ops, { id: present!.id, label: "Present", sirsCode: "P1" })).toEqual({ ok: true });
+      expect(await updateCode(tx, await as(tx, TEACHER), { id: present!.id, label: "Here", sirsCode: null })).toMatchObject({ ok: false });
     });
   });
 });

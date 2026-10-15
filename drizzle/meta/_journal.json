@@ -71,6 +71,13 @@
       "when": 1792088838787,
       "tag": "0009_phase2_list_members_constraints",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792092946924,
+      "tag": "0010_phase3_school_days_arrived_at",
+      "breakpoints": true
     }
   ]
 }

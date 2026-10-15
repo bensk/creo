@@ -13,7 +13,7 @@ export const manifest = defineModule({
   fieldSensitivity: {
     attendance_daily: {
       id: "standard", schoolId: "standard", createdAt: "standard", updatedAt: "standard", createdBy: "standard",
-      studentId: "standard", date: "standard", codeId: "standard", note: "standard", source: "standard",
+      studentId: "standard", date: "standard", codeId: "standard", note: "standard", source: "standard", arrivedAt: "standard",
     },
   },
 });

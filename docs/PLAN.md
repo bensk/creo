@@ -27,7 +27,7 @@ Effective-dated memberships throughout (`starts_on`, `ends_on` = last day includ
 **Calendar and structure**
 - `school_years` (label, starts_on, ends_on)
 - `terms` (school_year_id, type: trimester/quarter/marking_period, dates)
-- `school_days` (date, is_instructional, day_type) — imported from Google Calendar; denominator for attendance rates
+- `school_days` (date, is_instructional, day_type: full / half / other, note) — the calendar's exceptions, set by ops on the SIS calendar page (weekdays in the school year are school days, weekends off)
 - `bell_schedules`, `periods`
 
 **Identity and access**
@@ -57,7 +57,7 @@ Effective-dated memberships throughout (`starts_on`, `ends_on` = last day includ
 
 **Attendance**
 - `attendance_codes` (code, label, counts_as: present/absent/tardy/excused, sirs_code, position, archived_at)
-- `attendance_daily` (student_id, date [unique per student], code_id, note, source: sis / import; created_by = who recorded it) — basic tables shipped in Phase 1 for imported history
+- `attendance_daily` (student_id, date [unique per student], code_id, note, arrived_at [late desk], source: sis / import; created_by = who recorded it) — basic tables shipped in Phase 1 for imported history
 - Period attendance: not planned; possible future module
 
 **Behavior and restorative practices**
@@ -298,9 +298,9 @@ Each phase ends with a short demo to leadership and a written check against exit
 - Exit: the next trip eligibility list and one intervention tracker run in the SIS with no companion spreadsheet, built by a grade team lead without AI.
 
 ### Phase 3 — Attendance
-- [ ] Attendance codes with SIRS mapping; school days from Google Calendar
-- [ ] Homeroom attendance taking (keyboard and touch), late arrivals desk flow; pronunciation shown next to every name, with `space` to play the selected student's clip — homeroom taking done (p / a / t / e mark and move on, shift+p marks the rest present, space says the name, large touch buttons; teachers today for their homeroom, ops / admin / leaders any homeroom and earlier days); late desk waits on the schema questions
-- [ ] Attendance rates, chronic absence flags, daily missing-attendance report — rates and a Chronically absent field (under 90% this year) in the grid, and the missing-attendance view for ops on the Attendance page done; rates by school day wait on `school_days`
+- [x] Attendance codes with SIRS mapping; school days from Google Calendar — codes page (label and SIRS code; P / T / A / E kept); school days come from an SIS calendar page instead of Google Calendar (Ben, Oct 15 2026): weekdays are school days, ops mark days off, half days, and weekend school days
+- [x] Homeroom attendance taking (keyboard and touch), late arrivals desk flow; pronunciation shown next to every name, with `space` to play the selected student's clip (p / a / t / e, shift+p rest present; saves in the background with "all saved" and a guard before leaving; late desk: type a name, Enter, marked tardy with arrival time)
+- [x] Attendance rates, chronic absence flags, daily missing-attendance report (rates and Chronically absent in the grid; ops see marked / students per homeroom for any day, following the calendar)
 - [ ] Parallel run: SIS and Schoolrunner both recorded; nightly reconciliation report
 - [ ] Slack: attendance-not-taken DM
 - Exit (cutover): four consecutive weeks of reconciliation with zero unexplained differences; ops sign-off.
@@ -398,6 +398,7 @@ Not planned; add only if needed.
 28. Access matrix question 1 decided by Ben (October 9, 2026): a one-line medical alert on each student is standard sensitivity; allergy and other health details stay sensitive. Photo consent is standard. A blank "Social Media" value in the tracker imports as unknown, never as yes. The tracker's "FRP (meals)" column is the meal form's status, so no income data is stored.
 29. Clever roster import (Ben, October 13, 2026; ADR 0007): Schoolrunner's Clever files replace the Schoolrunner API for roster data, uploaded on an Imports page (admin and ops; `integrations.run_imports` confirmed for both). Clever wins over the Big Data Tracker for the fields it carries. Sections, section staff, and section enrollments added now; section teachers count as assigned for sensitive fields. Homerooms come from Clever's homeroom sections. Later the SIS will send these files to Clever.
 30. Phase 2 schema approved (Ben, October 15, 2026): `lists`, `list_members`, `trackers`, `tracker_fields`, `tracker_rows`, `tracker_templates`, one `shares` table for lists, trackers, and dashboards, and `directory_group_members` (Google Group membership read by the Directory sync). Every staff member can make lists and trackers; admins and leaders can see all of them; a share only reaches people whose role sees the item's sensitivity for every student (ADR 0008).
+31. Phase 3 (Ben, October 15, 2026): school days come from an SIS calendar page that ops maintain (not Google Calendar); `school_days` and `attendance_daily.arrived_at` approved; a late-desk sign-in makes the day tardy with the arrival time, whatever homeroom marked; codes stay P / T / A / E with their SIRS codes set on a codes page.
 
 ## Open decisions
 

@@ -33,6 +33,7 @@ test("a homeroom teacher takes attendance by keyboard in seconds", async ({ page
   await expect(students.nth(1)).toContainText("tardy");
 
   // Saved: still there after a reload. Then put the first student back to present.
+  await expect(page.getByText("all saved")).toBeVisible();
   await page.reload();
   await expect(page.getByText(`${count} of ${count} marked`)).toBeVisible();
   await expect(students.first()).toContainText("absent");
@@ -47,4 +48,20 @@ test("ops see which homerooms haven't finished; coaches can't open attendance", 
   await expect(page.getByRole("link", { name: "Syracuse" })).toBeVisible();
   await signInAs(page, /^Coach/);
   expect((await page.goto("/attendance"))?.status()).toBe(404);
+});
+
+test("ops sign a student in late by typing a name and pressing Enter", async ({ page }) => {
+  test.skip(weekend(), "no attendance on weekends");
+  await signInAs(page, /^Ops/);
+  await page.goto("/attendance");
+  await page.getByRole("link", { name: "Late arrivals" }).click();
+  const find = page.getByLabel("Find a student who arrived late");
+  await find.fill("mateo mart");
+  await expect(page.getByRole("button", { name: "Sign in late" }).first()).toBeVisible();
+  await find.press("Enter");
+  const signedIn = page.getByRole("status").filter({ hasText: "Signed in Mateo." });
+  const already = page.getByRole("alert").filter({ hasText: "already signed in today" });
+  await expect(signedIn.or(already)).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("listitem").filter({ hasText: "Mateo Martinez" })).toBeVisible();
 });

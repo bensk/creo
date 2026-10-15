@@ -6,6 +6,7 @@ import type { Db } from "@/core/db/types";
 import { can, Forbidden } from "@/core/permissions";
 import { fieldContext } from "@/core/query/run";
 import { getGroup, groupMembersOn, groupsForStaff, listGroups } from "../cohorts/queries";
+import { dayInfo } from "./calendar";
 import { attendanceCodes, attendanceDaily } from "./schema";
 
 // Taking daily homeroom attendance. Homeroom teachers take it for their own
@@ -41,8 +42,6 @@ export async function homeroomDay(db: Db, schoolId: string, groupId: string, dat
 /** Every mark was already what was asked: nothing to write. */
 class NoChange extends Error {}
 
-const isWeekend = (date: string) => [0, 6].includes(new Date(`${date}T12:00:00Z`).getUTCDay());
-
 const markInput = z.object({
   groupId: z.uuid(),
   date: z.iso.date(),
@@ -64,7 +63,8 @@ export async function markAttendance(db: Db, viewer: StaffViewer, input: z.input
       const manage = await can(tx, viewer, "attendance.manage");
       if (m.date > today) throw new Refused("Attendance can't be taken for a day that hasn't happened.");
       if (!manage && m.date !== today) throw new Refused("Teachers take attendance for today. Ask ops to correct an earlier day.");
-      if (isWeekend(m.date)) throw new Refused("That's a weekend.");
+      const day = await dayInfo(tx, viewer.schoolId, m.date);
+      if (!day.isSchoolDay) throw new Refused(day.kind === "weekend" ? "That's a weekend." : `That isn't a school day${day.note ? ` (${day.note})` : ""}.`);
       const group = await getGroup(tx, viewer.schoolId, m.groupId);
       if (!group || group.type !== "homeroom") throw new Refused("That homeroom wasn't found.");
       if (!manage) {
