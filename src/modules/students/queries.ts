@@ -1,4 +1,4 @@
-import { and, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { currentOn, schoolToday } from "@/core/db/dates";
 import type { Db } from "@/core/db/types";
 import { schools } from "@/core/identity/schema";
@@ -173,4 +173,33 @@ export async function countEnrolled(db: Db, schoolId: string): Promise<number> {
     .from(enrollments)
     .where(and(eq(enrollments.schoolId, schoolId), eq(enrollments.status, "active"), sql`${enrollments.exitDate} is null`));
   return row?.n ?? 0;
+}
+
+/**
+ * Name parts, current grade, and pronunciation for a set of students, in the
+ * order given (for rosters on group, class, list, and tracker pages). Standard fields only.
+ */
+export async function rosterFor(db: Db, schoolId: string, studentIds: readonly string[]) {
+  if (studentIds.length === 0) return [];
+  const outerId = sql.raw(`"students"."id"`);
+  const rows = await db
+    .select({
+      id: students.id, legalFirstName: students.legalFirstName, legalLastName: students.legalLastName,
+      preferredFirstName: students.preferredFirstName, preferredLastName: students.preferredLastName,
+      grade: sql<number | null>`(select e.grade_level from enrollments e where e.student_id = ${outerId} and e.status = 'active' and e.exit_date is null order by e.entry_date desc limit 1)`,
+      phonetic: sql<string | null>`(select np.phonetic from name_pronunciations np where np.student_id = ${outerId} order by np.created_at desc limit 1)`,
+      audioId: sql<string | null>`(select case when np.audio_object_key is not null then np.id end from name_pronunciations np where np.student_id = ${outerId} order by np.created_at desc limit 1)`,
+    })
+    .from(students)
+    .where(and(eq(students.schoolId, schoolId), inArray(students.id, [...studentIds])));
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  return studentIds.map((id) => byId.get(id)).filter((r): r is NonNullable<typeof r> => Boolean(r));
+}
+
+/** Which of these students are currently enrolled in the school. */
+export async function currentlyEnrolled(db: Db, schoolId: string, studentIds: readonly string[]): Promise<Set<string>> {
+  if (studentIds.length === 0) return new Set();
+  const rows = await db.select({ id: enrollments.studentId }).from(enrollments)
+    .where(and(eq(enrollments.schoolId, schoolId), inArray(enrollments.studentId, [...studentIds]), eq(enrollments.status, "active"), isNull(enrollments.exitDate)));
+  return new Set(rows.map((r) => r.id));
 }

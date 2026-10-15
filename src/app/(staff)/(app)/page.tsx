@@ -1,6 +1,7 @@
 import { requireViewer } from "@/core/auth/server";
 import { getDb } from "@/core/db/client";
-import { groupsForStaff } from "@/modules/cohorts/queries";
+import Link from "next/link";
+import { groupsForStaff, listSections } from "@/modules/cohorts/queries";
 import { GroupList } from "./GroupList";
 
 function greeting(now: Date): string {
@@ -10,7 +11,10 @@ function greeting(now: Date): string {
 
 export default async function StaffHome() {
   const viewer = await requireViewer("staff");
-  const groups = await groupsForStaff(getDb(), viewer.staffId);
+  const [groups, classes] = await Promise.all([
+    groupsForStaff(getDb(), viewer.staffId),
+    listSections(getDb(), viewer.schoolId, { staffId: viewer.staffId }),
+  ]);
   const firstName = viewer.displayName.split(" ")[0];
   const today = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", weekday: "long", month: "long", day: "numeric" }).format(new Date());
 
@@ -44,6 +48,28 @@ export default async function StaffHome() {
           </p>
         )}
       </section>
+
+      {classes.length > 0 && (
+        <section aria-labelledby="classes-h" className="grid gap-3">
+          <h2 id="classes-h" className="text-lg font-semibold">Your classes</h2>
+          <ul className="grid overflow-hidden rounded-lg border border-line-soft">
+            {classes.map((c) => (
+              <li key={c.id} className="border-b border-line-soft last:border-b-0">
+                <Link href={`/sections/${c.id}`} className="flex items-center gap-4 px-4 py-3 hover:bg-surface-raised focus-visible:bg-surface-raised">
+                  <span className="grid">
+                    <span className="font-semibold text-ink-title">{c.name}</span>
+                    <span className="voice text-xs text-ink-muted">{[c.courseName, c.period ? `period ${c.period}` : null].filter(Boolean).join(" · ")}</span>
+                  </span>
+                  <span className="ml-auto text-right">
+                    <span className="data text-lg text-ink-title">{c.students}</span>
+                    <span className="voice ml-1 text-xs text-ink-muted">students</span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }
