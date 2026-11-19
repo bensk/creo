@@ -13,10 +13,12 @@ export interface KeyEventLike {
 export function eventToStep(e: KeyEventLike, isMac: boolean): string | null {
   if (["Meta", "Control", "Alt", "Shift"].includes(e.key)) return null;
   if (e.altKey) return null;
-  const key = e.key === "Esc" ? "escape" : e.key.length === 1 ? e.key.toLowerCase() : e.key.toLowerCase();
+  const key = e.key === "Esc" ? "escape" : e.key === " " ? "space" : e.key.toLowerCase();
   const mod = isMac ? e.metaKey : e.ctrlKey;
   if (mod) return `mod+${key}`;
   if (e.metaKey || e.ctrlKey) return null;
+  // Shift with a letter is its own step ("shift+p"), so P and p can do different things.
+  if (e.shiftKey && /^[a-z]$/.test(key)) return `shift+${key}`;
   // "?" arrives as shift+/ on US keyboards; e.key is already "?".
   return key;
 }
@@ -48,7 +50,7 @@ export function matchSteps(typed: readonly string[], shortcuts: Iterable<string>
 export function displaySteps(keys: string, isMac: boolean): string[][] {
   const names: Record<string, string> = { escape: "Esc", enter: "Enter", space: "Space", arrowup: "↑", arrowdown: "↓" };
   return parseSteps(keys).map((step) =>
-    step.split("+").map((part) => (part === "mod" ? (isMac ? "⌘" : "Ctrl") : names[part] ?? part.toUpperCase())),
+    step.split("+").map((part) => (part === "mod" ? (isMac ? "⌘" : "Ctrl") : part === "shift" ? "Shift" : names[part] ?? part.toUpperCase())),
   );
 }
 

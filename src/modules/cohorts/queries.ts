@@ -252,3 +252,11 @@ export async function activeStaff(db: Db, schoolId: string) {
     .where(and(eq(staff.schoolId, schoolId), eq(staff.status, "active")))
     .orderBy(staff.familyName, staff.givenName);
 }
+
+/** Students in a group on a given date (for attendance on that day). */
+export async function groupMembersOn(db: Db, groupId: string, date: string): Promise<string[]> {
+  const rows = await db.select({ id: groupMemberships.studentId }).from(groupMemberships)
+    .where(and(eq(groupMemberships.groupId, groupId), sql`${groupMemberships.startsOn} <= ${date}::date`,
+      sql`(${groupMemberships.endsOn} is null or ${groupMemberships.endsOn} >= ${date}::date)`));
+  return rows.map((r) => r.id);
+}

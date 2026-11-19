@@ -27,7 +27,7 @@ test.describe("staff shell", () => {
   test("g then a letter goes to each place", async ({ page }) => {
     await signInAs(page, TEACHER, "/");
     for (const [key, path, heading] of [
-      ["s", "/students", "Students"], ["a", "/attendance", "Attendance"], ["b", "/behavior", "Behavior"],
+      ["s", "/students", "Students"], ["a", "/attendance", "Syracuse"], ["b", "/behavior", "Behavior"],
       ["c", "/communication", "Communication"], ["t", "/trackers", "Trackers"], ["d", "/dashboards", "Dashboards"],
       ["l", "/lists", "Lists"],
     ] as const) {
