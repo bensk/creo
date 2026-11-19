@@ -1,12 +1,8 @@
 import { SEED_HISTORY_THROUGH, schoolDays, type SeedBatch, type SeedContext, type StudentPlacement } from "../../core/seed/types";
+import { STANDARD_CODES } from "./codes-standard";
 import { attendanceCodes, attendanceDaily } from "./schema";
 
-const CODES = [
-  { code: "P", label: "Present", countsAs: "present" },
-  { code: "T", label: "Tardy", countsAs: "tardy" },
-  { code: "A", label: "Absent", countsAs: "absent" },
-  { code: "E", label: "Excused absence", countsAs: "excused" },
-] as const;
+const CODES = STANDARD_CODES;
 
 /**
  * Codes plus daily homeroom attendance from the first day through

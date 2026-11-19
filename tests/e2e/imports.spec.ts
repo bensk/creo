@@ -25,7 +25,7 @@ function cleverFiles(osis: string) {
 test("ops previews a Clever upload without saving anything", async ({ page }) => {
   await signInAs(page, /^Ops/);
   await page.getByRole("link", { name: "Imports" }).click();
-  await page.locator('input[type="file"]').setInputFiles(cleverFiles("999888001"));
+  await page.getByLabel("Clever files to upload").setInputFiles(cleverFiles("999888001"));
   await page.getByRole("button", { name: "Preview changes" }).click();
   const status = page.getByRole("status").filter({ hasText: "Nothing is saved yet" });
   await expect(status).toBeVisible();
@@ -37,7 +37,7 @@ test("ops previews a Clever upload without saving anything", async ({ page }) =>
 test("a synthetic database refuses files with real OSIS numbers", async ({ page }) => {
   await signInAs(page, /^Admin/);
   await page.goto("/imports");
-  await page.locator('input[type="file"]').setInputFiles(cleverFiles("212345678"));
+  await page.getByLabel("Clever files to upload").setInputFiles(cleverFiles("212345678"));
   await page.getByRole("button", { name: "Preview changes" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "synthetic data only" })).toBeVisible();
 });
@@ -45,7 +45,7 @@ test("a synthetic database refuses files with real OSIS numbers", async ({ page 
 test("missing files are named", async ({ page }) => {
   await signInAs(page, /^Admin/);
   await page.goto("/imports");
-  await page.locator('input[type="file"]').setInputFiles(cleverFiles("999888002").slice(0, 2));
+  await page.getByLabel("Clever files to upload").setInputFiles(cleverFiles("999888002").slice(0, 2));
   await page.getByRole("button", { name: "Preview changes" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "Missing: teachers.csv, staff.csv, sections.csv, enrollments.csv" })).toBeVisible();
 });
@@ -53,4 +53,18 @@ test("missing files are named", async ({ page }) => {
 test("teachers can't open Imports", async ({ page }) => {
   await signInAs(page, /^Teacher \(7th grade, Syracuse homeroom\)/);
   expect((await page.goto("/imports"))?.status()).toBe(404);
+});
+
+test("ops preview a Schoolrunner attendance export; real OSIS numbers are refused here", async ({ page }) => {
+  const header = "Student,Student ID,SR Student Number,SIS Student Number,State ID,Grade Level,Date,Absence Type Code,Absence Type,Comments,Teammate,Homeroom,Incident Id,Absence Active";
+  const file = (osis: string) => ({ name: "Daily Attendance Absence Export.csv", mimeType: "text/csv", buffer: Buffer.from(`${header}\n"Test, Student",1,${osis},${osis},,7th,2026-10-14,P,Present,,"Reyes, Jordan",7 Room,,1\n`) });
+  await signInAs(page, /^Ops/);
+  await page.goto("/imports");
+  const exports = page.getByLabel("Daily Attendance exports");
+  await exports.setInputFiles(file("999999998"));
+  await page.getByRole("button", { name: "Preview", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Nothing is saved yet" }).last()).toContainText("Rows skipped (1)");
+  await exports.setInputFiles(file("212345678"));
+  await page.getByRole("button", { name: "Preview", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "synthetic data only" })).toBeVisible();
 });

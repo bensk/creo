@@ -56,6 +56,7 @@ export function CleverUpload() {
           type="file"
           multiple
           accept=".csv,text/csv"
+          aria-label="Clever files to upload"
           onChange={(e) => {
             setFiles([...(e.target.files ?? [])]);
             setPreview(null);

@@ -100,6 +100,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
       <AttendanceTaker
         groupId={selected.id}
         date={day}
+        manage={manage}
         codes={codes.map((c) => ({ id: c.id, code: c.code, label: c.label, countsAs: c.countsAs }))}
         students={roster.map((s) => ({
           id: s.id,

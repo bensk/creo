@@ -211,3 +211,11 @@ export async function enrolledStudentIds(db: Db, schoolId: string, grade?: numbe
       ...(grade ? [eq(enrollments.gradeLevel, grade)] : [])));
   return rows.map((r) => r.id);
 }
+
+/** Student ids for OSIS numbers (imports that identify students by OSIS). */
+export async function studentIdsByOsis(db: Db, schoolId: string, osisList: readonly string[]): Promise<Map<string, string>> {
+  if (osisList.length === 0) return new Map();
+  const rows = await db.select({ id: students.id, osis: students.osis }).from(students)
+    .where(and(eq(students.schoolId, schoolId), inArray(students.osis, [...osisList])));
+  return new Map(rows.map((r) => [r.osis!, r.id]));
+}
